@@ -151,10 +151,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           settings.selectedModel,
           settings.useCustomPrompt ? 'custom' : settings.answerMode
         );
-        console.log('✅ History saved to session');
+        console.log('✅ History saved to active session:', activeSession.name);
       } catch (histError) {
         console.error('❌ Failed to save history:', histError);
       }
+    } else {
+      console.warn('⚠️ No active session - history not saved. Please create/activate a session in Settings.');
     }
 
     // Send result to content script

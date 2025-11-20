@@ -63,7 +63,8 @@ function showLoadingBubble(appearance?: BubbleAppearance): void {
   // Create bubble element
   const bubble = document.createElement('div');
   bubble.className = 'genovaai-bubble loading';
-  bubble.innerHTML = '<div class="loading-spinner"></div><span>Loading...</span>';
+  // Only show spinner, no text
+  bubble.innerHTML = '<div class="loading-spinner"></div>';
 
   // Apply appearance settings
   if (appearance) {
@@ -72,7 +73,7 @@ function showLoadingBubble(appearance?: BubbleAppearance): void {
       bubble.style.border = 'none';
       bubble.style.boxShadow = 'none';
       bubble.style.backdropFilter = 'none';
-      bubble.style.textShadow = '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)';
+      // No text shadow for transparent
     } else {
       bubble.style.backgroundColor = appearance.bgColor;
     }
@@ -122,8 +123,7 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
       bubble.style.border = 'none';
       bubble.style.boxShadow = 'none';
       bubble.style.backdropFilter = 'none';
-      // Add text shadow for better readability
-      bubble.style.textShadow = '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)';
+      // No text shadow for clear readability on transparent background
     } else {
       // For errors, override with red background
       bubble.style.backgroundColor = isError ? '#dc2626' : appearance.bgColor;

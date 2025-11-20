@@ -109,7 +109,7 @@ async function callGeminiAPI(
     }],
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 2000, // Increased from 500 to prevent MAX_TOKENS errors
+      maxOutputTokens: 800, // Balanced: enough for complete answers, not too high
     }
   };
   
@@ -391,7 +391,7 @@ async function callOpenRouterAPI(
       model: model,
       messages: messages,
       temperature: 0.3,
-      max_tokens: 2000, // Increased from 500
+      max_tokens: 800, // Balanced token limit
     }),
   });
 
