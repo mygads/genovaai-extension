@@ -10,9 +10,10 @@ import SessionManager from './components/SessionManager';
 import { UsageMonitor } from './components/UsageMonitor';
 import HistoryViewer from './components/HistoryViewer';
 import ErrorLogViewer from './components/ErrorLogViewer';
+import DebugViewer from './components/DebugViewer';
 import './styles.css';
 
-type TabType = 'settings' | 'history' | 'errors';
+type TabType = 'settings' | 'history' | 'errors' | 'debug';
 
 function App() {
   const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
@@ -142,6 +143,23 @@ function App() {
           <FaPalette style={{ marginRight: '8px' }} />
           Error Logs
         </button>
+        <button
+          onClick={() => setActiveTab('debug')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'debug' ? '3px solid #FF9800' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'debug' ? '600' : '500',
+            color: activeTab === 'debug' ? '#FF9800' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaCog style={{ marginRight: '8px' }} />
+          Debug
+        </button>
       </div>
 
       <div className="app-content">
@@ -216,6 +234,45 @@ function App() {
                 />
               </section>
             )}
+            
+            {/* Debug Mode Toggle */}
+            <section className="settings-card full-width">
+              <div className="card-header">
+                <FaCog className="card-icon" />
+                <h2>Debug Mode</h2>
+              </div>
+              <div style={{ padding: '15px' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '10px',
+                  cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={settings.debugMode}
+                    onChange={(e) => handleSettingsChange({ debugMode: e.target.checked })}
+                    style={{ 
+                      width: '20px', 
+                      height: '20px',
+                      cursor: 'pointer',
+                    }}
+                  />
+                  <span style={{ fontSize: '15px' }}>
+                    Enable debug logging (records all API requests/responses)
+                  </span>
+                </label>
+                <p style={{ 
+                  marginTop: '10px', 
+                  fontSize: '13px', 
+                  color: '#666',
+                  marginLeft: '30px',
+                }}>
+                  When enabled, all LLM API requests and responses will be logged for debugging.
+                  View logs in the Debug tab. Last 50 requests are kept.
+                </p>
+              </div>
+            </section>
           </div>
         )}
 
@@ -230,6 +287,13 @@ function App() {
         {activeTab === 'errors' && (
           <div className="settings-card full-width">
             <ErrorLogViewer />
+          </div>
+        )}
+        
+        {/* Debug Tab */}
+        {activeTab === 'debug' && (
+          <div className="settings-card full-width">
+            <DebugViewer />
           </div>
         )}
       </div>

@@ -103,6 +103,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     console.log('Answer Mode:', settings.useCustomPrompt ? 'N/A (custom)' : settings.answerMode);
     console.log('Active Session:', activeSession?.name || 'None');
     console.log('Knowledge Files:', activeSession?.knowledgeFiles?.length || 0);
+    console.log('Debug Mode:', settings.debugMode ? 'Enabled' : 'Disabled');
+
+    // Show loading indicator
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'GENOVA_LOADING',
+        bubbleAppearance: settings.bubbleAppearance,
+      } as GenovaMessage);
+      console.log('✨ Loading indicator sent');
+    } catch (loadingError) {
+      console.warn('⚠️ Could not send loading indicator:', loadingError);
+    }
 
     // Call LLM API with multimodal support
     const answer = await callLLM({
@@ -113,7 +125,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       knowledgeText,
       knowledgeFiles: activeSession?.knowledgeFiles,
       question: selectedText,
+      debugMode: settings.debugMode,
     });
+
+    console.log('Answer received:', answer);
 
     // Update usage tracking (only for Gemini)
     if (settings.provider === 'gemini') {
@@ -123,9 +138,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       // Note: In a real implementation, you would get actual token count from API response
       // For now, we use estimation
       await updateUsage(actualTokens);
+      console.log('✅ Usage updated:', actualTokens, 'tokens');
     }
-
-    console.log('Answer received:', answer);
 
     // Save to session history
     if (activeSession) {
@@ -137,9 +151,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
           settings.selectedModel,
           settings.useCustomPrompt ? 'custom' : settings.answerMode
         );
-        console.log('History saved to session');
+        console.log('✅ History saved to session');
       } catch (histError) {
-        console.error('Failed to save history:', histError);
+        console.error('❌ Failed to save history:', histError);
       }
     }
 
@@ -150,7 +164,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       bubbleAppearance: settings.bubbleAppearance,
     };
 
-    chrome.tabs.sendMessage(tab.id, message);
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+      console.log('✅ Message sent to tab successfully');
+    } catch (sendError) {
+      console.error('Failed to send message to tab:', sendError);
+      // Content script might not be injected, try to communicate anyway
+      console.warn('Content script may not be available on this page');
+    }
   } catch (error) {
     console.error('❌ Error in background script:', error);
     console.error('Error details:', {
@@ -167,27 +188,49 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         `Provider: ${settings?.provider || 'unknown'}, Model: ${settings?.selectedModel || 'unknown'}`,
         error instanceof Error ? error.stack : undefined
       );
+      console.log('✅ Error log saved');
     } catch (logError) {
-      console.error('Failed to log error:', logError);
+      console.error('❌ Failed to log error:', logError);
+    }
+    
+    // Save failed request to history if session exists
+    if (activeSession) {
+      try {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await addHistoryToSession(
+          activeSession.id,
+          selectedText,
+          `ERROR: ${errorMessage}`,
+          settings?.selectedModel || 'unknown',
+          settings?.useCustomPrompt ? 'custom' : settings?.answerMode || 'short'
+        );
+        console.log('✅ Failed request saved to history');
+      } catch (histError) {
+        console.error('❌ Failed to save error to history:', histError);
+      }
     }
     
     const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan';
-    sendErrorToTab(tab.id, errorMessage);
+    await sendErrorToTab(tab.id, errorMessage);
   }
 });
 
 /**
  * Send error message to tab
  */
-function sendErrorToTab(tabId: number, error: string): void {
+async function sendErrorToTab(tabId: number, error: string): Promise<void> {
   const message: GenovaMessage = {
     type: 'GENOVA_ERROR',
     error,
   };
   
-  chrome.tabs.sendMessage(tabId, message).catch(() => {
-    console.error('Failed to send error to tab:', error);
-  });
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+    console.log('✅ Error message sent to tab');
+  } catch (sendError) {
+    console.error('Failed to send error message to tab:', sendError);
+    console.warn('Content script may not be available on this page');
+  }
 }
 
 // Handle extension icon click - open options page

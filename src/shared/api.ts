@@ -54,6 +54,7 @@ export interface LLMRequestParams {
   knowledgeText?: string;
   knowledgeFiles?: KnowledgeFile[];
   question: string;
+  debugMode?: boolean;
 }
 
 /**
@@ -65,8 +66,10 @@ async function callGeminiAPI(
   systemInstruction: string | undefined,
   knowledgeText: string | undefined,
   knowledgeFiles: KnowledgeFile[] | undefined,
-  question: string
-): Promise<string> {
+  question: string,
+  debugMode: boolean = false
+): Promise<{ answer: string; debugInfo?: any }> {
+  const startTime = Date.now();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   
   // Build contents array with multimodal support
@@ -106,7 +109,7 @@ async function callGeminiAPI(
     }],
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: 500,
+      maxOutputTokens: 2000, // Increased from 500 to prevent MAX_TOKENS errors
     }
   };
   
@@ -133,6 +136,7 @@ async function callGeminiAPI(
     body: JSON.stringify(requestBody),
   });
 
+  const duration = Date.now() - startTime;
   console.log('📡 Gemini API Response Status:', response.status, response.statusText);
 
   if (!response.ok) {
@@ -144,6 +148,29 @@ async function callGeminiAPI(
       errorData = JSON.parse(responseText);
     } catch {
       errorData = { message: responseText };
+    }
+    
+    // ALWAYS log debug info on error (not just when debugMode=true)
+    try {
+      const { addDebugLog } = await import('./storage');
+      await addDebugLog(
+        'gemini',
+        model,
+        {
+          systemInstruction: systemInstruction?.substring(0, 500),
+          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
+          fileCount: knowledgeFiles?.length || 0,
+          question: question.substring(0, 500),
+        },
+        {
+          error: `${response.status}: ${JSON.stringify(errorData)}`,
+          rawResponse: responseText.substring(0, 1000),
+        },
+        duration
+      );
+      console.log('✅ Debug log saved for error response');
+    } catch (logError) {
+      console.error('❌ Failed to log debug info:', logError);
     }
     
     throw new Error(`Gemini API error: ${response.status} - ${JSON.stringify(errorData)}`);
@@ -161,36 +188,150 @@ async function callGeminiAPI(
     throw new Error(`Invalid JSON response from Gemini API: ${responseText.substring(0, 200)}`);
   }
   
-  // Validate response structure
-  if (!data.candidates) {
+  // Validate response structure with detailed error messages
+  if (!data.candidates || data.candidates.length === 0) {
     console.error('❌ Missing candidates in response:', data);
-    throw new Error(`Invalid response from Gemini API: No candidates found. Response: ${JSON.stringify(data)}`);
+    
+    // Check for prompt feedback (blocked content)
+    if (data.promptFeedback) {
+      const blockReason = data.promptFeedback.blockReason || 'UNKNOWN';
+      const safetyRatings = data.promptFeedback.safetyRatings || [];
+      throw new Error(
+        `Gemini API blocked request: ${blockReason}. ` +
+        `Safety: ${JSON.stringify(safetyRatings)}`
+      );
+    }
+    
+    throw new Error(
+      `Gemini API returned no candidates. ` +
+      `Response: ${JSON.stringify(data).substring(0, 200)}`
+    );
   }
   
-  if (!data.candidates[0]) {
-    console.error('❌ Empty candidates array:', data);
-    throw new Error(`Invalid response from Gemini API: Empty candidates array. Response: ${JSON.stringify(data)}`);
+  const candidate = data.candidates[0];
+  
+  // Check finish reason
+  if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+    console.warn('⚠️ Unusual finish reason:', candidate.finishReason);
+    
+    // ALWAYS log debug info when finish reason is not STOP
+    try {
+      const { addDebugLog } = await import('./storage');
+      await addDebugLog(
+        'gemini',
+        model,
+        {
+          systemInstruction: systemInstruction?.substring(0, 500),
+          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
+          fileCount: knowledgeFiles?.length || 0,
+          question: question.substring(0, 500),
+        },
+        {
+          error: `Finish reason: ${candidate.finishReason}`,
+          rawResponse: JSON.stringify(data).substring(0, 2000),
+          finishReason: candidate.finishReason,
+        },
+        duration
+      );
+      console.log('✅ Debug log saved for non-STOP finish reason');
+    } catch (logError) {
+      console.error('❌ Failed to log debug info:', logError);
+    }
+    
+    // Handle specific finish reasons
+    if (candidate.finishReason === 'SAFETY') {
+      throw new Error(
+        'Gemini API blocked response due to safety filters. ' +
+        'Try rephrasing your question or adjusting content filters.'
+      );
+    } else if (candidate.finishReason === 'MAX_TOKENS') {
+      throw new Error(
+        'Gemini API stopped due to max tokens. ' +
+        'Response was too long. Try a shorter question.'
+      );
+    } else if (candidate.finishReason === 'RECITATION') {
+      throw new Error(
+        'Gemini API detected potential copyrighted content. ' +
+        'Try rephrasing your question.'
+      );
+    } else {
+      throw new Error(
+        `Gemini API stopped with reason: ${candidate.finishReason}. ` +
+        `This may indicate content policy violation or technical issue.`
+      );
+    }
   }
   
-  if (!data.candidates[0].content) {
-    console.error('❌ Missing content in candidate:', data.candidates[0]);
-    throw new Error(`Invalid response from Gemini API: No content in candidate. Response: ${JSON.stringify(data.candidates[0])}`);
+  // Validate content structure
+  if (!candidate.content) {
+    console.error('❌ Missing content in candidate:', candidate);
+    throw new Error(
+      `Gemini API returned empty content. ` +
+      `Candidate: ${JSON.stringify(candidate).substring(0, 200)}`
+    );
   }
   
-  if (!data.candidates[0].content.parts || !Array.isArray(data.candidates[0].content.parts)) {
-    console.error('❌ Missing or invalid parts:', data.candidates[0].content);
-    throw new Error(`Invalid response from Gemini API: No parts in content. Response: ${JSON.stringify(data.candidates[0].content)}`);
+  if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+    console.error('❌ Missing or empty parts:', candidate.content);
+    throw new Error(
+      `Gemini API returned no content parts. ` +
+      `This may indicate content filtering or an API issue. ` +
+      `Content: ${JSON.stringify(candidate.content)}`
+    );
   }
   
-  if (!data.candidates[0].content.parts[0] || !data.candidates[0].content.parts[0].text) {
-    console.error('❌ Missing text in first part:', data.candidates[0].content.parts);
-    throw new Error(`Invalid response from Gemini API: No text in first part. Response: ${JSON.stringify(data.candidates[0].content.parts)}`);
+  const firstPart = candidate.content.parts[0];
+  if (!firstPart || !firstPart.text) {
+    console.error('❌ Missing text in first part:', candidate.content.parts);
+    throw new Error(
+      `Gemini API returned no text in response. ` +
+      `Parts: ${JSON.stringify(candidate.content.parts)}`
+    );
   }
 
-  const answer = data.candidates[0].content.parts[0].text.trim();
+  const answer = firstPart.text.trim();
+  
+  if (!answer) {
+    throw new Error('Gemini API returned empty text response.');
+  }
+  
   console.log('✨ Gemini API Answer:', answer);
   
-  return answer;
+  // Extract token info if available
+  const usageMetadata = data.usageMetadata;
+  const tokenCount = usageMetadata ? {
+    promptTokens: usageMetadata.promptTokenCount,
+    candidatesTokens: usageMetadata.candidatesTokenCount,
+    totalTokens: usageMetadata.totalTokenCount,
+  } : undefined;
+  
+  // Log debug info if enabled
+  if (debugMode) {
+    try {
+      const { addDebugLog } = await import('./storage');
+      await addDebugLog(
+        'gemini',
+        model,
+        {
+          systemInstruction: systemInstruction?.substring(0, 500),
+          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
+          fileCount: knowledgeFiles?.length || 0,
+          question: question.substring(0, 500),
+        },
+        {
+          answer: answer.substring(0, 500),
+          rawResponse: JSON.stringify(data).substring(0, 2000),
+          finishReason: candidate.finishReason || 'STOP',
+          tokenCount,
+        },
+        duration
+      );
+    } catch (logError) {
+      console.error('Failed to log debug info:', logError);
+    }
+  }
+  
+  return { answer, debugInfo: debugMode ? { tokenCount, finishReason: candidate.finishReason, duration } : undefined };
 }
 
 /**
@@ -250,7 +391,7 @@ async function callOpenRouterAPI(
       model: model,
       messages: messages,
       temperature: 0.3,
-      max_tokens: 500,
+      max_tokens: 2000, // Increased from 500
     }),
   });
 
@@ -272,7 +413,7 @@ async function callOpenRouterAPI(
  * Call LLM API based on provider
  */
 export async function callLLM(params: LLMRequestParams): Promise<string> {
-  const { provider, apiKey, model, systemInstruction, knowledgeText, knowledgeFiles, question } = params;
+  const { provider, apiKey, model, systemInstruction, knowledgeText, knowledgeFiles, question, debugMode } = params;
 
   if (!apiKey || apiKey.trim() === '') {
     throw new Error('API key belum diatur di Settings.');
@@ -280,14 +421,16 @@ export async function callLLM(params: LLMRequestParams): Promise<string> {
 
   try {
     if (provider === 'gemini') {
-      return await callGeminiAPI(
+      const result = await callGeminiAPI(
         apiKey,
         model as GeminiModel,
         systemInstruction,
         knowledgeText,
         knowledgeFiles,
-        question
+        question,
+        debugMode || false
       );
+      return result.answer;
     } else if (provider === 'openrouter') {
       return await callOpenRouterAPI(
         apiKey,

@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   SETTINGS: 'genovaai_settings',
   SESSIONS: 'genovaai_sessions',
   ERROR_LOGS: 'genovaai_error_logs',
+  DEBUG_LOGS: 'genovaai_debug_logs',
 };
 
 /**
@@ -51,18 +52,28 @@ export async function getSettings(): Promise<Settings> {
 export async function saveSettings(settings: Settings): Promise<void> {
   try {
     console.log('💾 Saving settings to chrome.storage.sync...');
-    console.log('📝 Settings to save:', settings);
+    console.log('📝 Settings to save:', JSON.stringify(settings, null, 2));
     
-    await chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: settings });
+    // Ensure settings object is serializable
+    const settingsToSave = JSON.parse(JSON.stringify(settings));
+    
+    await chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: settingsToSave });
     
     console.log('✅ Settings saved successfully');
     
     // Verify save by reading back
     const verify = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS);
-    console.log('🔍 Verification read:', verify[STORAGE_KEYS.SETTINGS]);
+    console.log('🔍 Verification read:', JSON.stringify(verify[STORAGE_KEYS.SETTINGS], null, 2));
     
     if (!verify[STORAGE_KEYS.SETTINGS]) {
       throw new Error('Settings verification failed - data not found after save');
+    }
+    
+    // Double check API key was saved
+    const verifiedSettings = verify[STORAGE_KEYS.SETTINGS] as Settings;
+    if (settings.apiKey && !verifiedSettings.apiKey) {
+      console.error('⚠️ API key was not saved! Retrying...');
+      await chrome.storage.sync.set({ [STORAGE_KEYS.SETTINGS]: settingsToSave });
     }
   } catch (error) {
     console.error('❌ Error saving settings:', error);
@@ -176,26 +187,33 @@ export async function addHistoryToSession(
   model: string,
   answerMode: string
 ): Promise<void> {
-  const sessions = await getSessions();
-  const updatedSessions = sessions.map(s => {
-    if (s.id === sessionId) {
-      const historyItem = {
-        id: `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: Date.now(),
-        question,
-        answer,
-        model,
-        answerMode: answerMode as any,
-      };
-      return {
-        ...s,
-        history: [...(s.history || []), historyItem],
-        dateModified: Date.now(),
-      };
-    }
-    return s;
-  });
-  await saveSessions(updatedSessions);
+  try {
+    console.log('💾 Adding history to session:', sessionId);
+    const sessions = await getSessions();
+    const updatedSessions = sessions.map(s => {
+      if (s.id === sessionId) {
+        const historyItem = {
+          id: `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: Date.now(),
+          question,
+          answer,
+          model,
+          answerMode: answerMode as any,
+        };
+        return {
+          ...s,
+          history: [...(s.history || []), historyItem],
+          dateModified: Date.now(),
+        };
+      }
+      return s;
+    });
+    await saveSessions(updatedSessions);
+    console.log('✅ History added successfully');
+  } catch (error) {
+    console.error('❌ Failed to add history:', error);
+    throw error;
+  }
 }
 
 /**
@@ -233,16 +251,22 @@ export async function addErrorLog(
   details?: string,
   stack?: string
 ): Promise<void> {
-  const logs = await getErrorLogs();
-  const newLog = {
-    id: `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    timestamp: Date.now(),
-    type,
-    message,
-    details,
-    stack,
-  };
-  await saveErrorLogs([...logs, newLog]);
+  try {
+    console.log('💾 Saving error log...', { type, message });
+    const logs = await getErrorLogs();
+    const newLog = {
+      id: `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      type,
+      message,
+      details,
+      stack,
+    };
+    await saveErrorLogs([...logs, newLog]);
+    console.log('✅ Error log saved');
+  } catch (error) {
+    console.error('❌ Failed to save error log:', error);
+  }
 }
 
 /**
@@ -250,4 +274,66 @@ export async function addErrorLog(
  */
 export async function clearErrorLogs(): Promise<void> {
   await saveErrorLogs([]);
+}
+
+/**
+ * Get debug logs from chrome.storage.local
+ */
+export async function getDebugLogs(): Promise<any[]> {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.DEBUG_LOGS);
+    return (result[STORAGE_KEYS.DEBUG_LOGS] as any[]) || [];
+  } catch (error) {
+    console.error('Error getting debug logs:', error);
+    return [];
+  }
+}
+
+/**
+ * Save debug logs to chrome.storage.local
+ */
+export async function saveDebugLogs(logs: any[]): Promise<void> {
+  try {
+    // Keep only last 50 debug logs
+    const limitedLogs = logs.slice(-50);
+    await chrome.storage.local.set({ [STORAGE_KEYS.DEBUG_LOGS]: limitedLogs });
+  } catch (error) {
+    console.error('Error saving debug logs:', error);
+  }
+}
+
+/**
+ * Add debug log
+ */
+export async function addDebugLog(
+  provider: string,
+  model: string,
+  request: any,
+  response: any,
+  duration: number
+): Promise<void> {
+  try {
+    console.log('💾 Saving debug log...', { provider, model, duration });
+    const logs = await getDebugLogs();
+    const newLog = {
+      id: `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      timestamp: Date.now(),
+      provider,
+      model,
+      request,
+      response,
+      duration,
+    };
+    await saveDebugLogs([...logs, newLog]);
+    console.log('✅ Debug log saved');
+  } catch (error) {
+    console.error('❌ Failed to save debug log:', error);
+  }
+}
+
+/**
+ * Clear debug logs
+ */
+export async function clearDebugLogs(): Promise<void> {
+  await saveDebugLogs([]);
 }

@@ -77,6 +77,29 @@ export interface BubbleAppearance {
   position: BubblePosition;
   bgColor: string;
   textColor: string;
+  bgTransparent: boolean; // If true, use transparent background
+}
+
+export interface DebugLogItem {
+  id: string;
+  timestamp: number;
+  provider: string;
+  model: string;
+  request: {
+    systemInstruction?: string;
+    knowledgeText?: string;
+    fileCount: number;
+    question: string;
+    estimatedTokens?: number;
+  };
+  response: {
+    answer?: string;
+    error?: string;
+    rawResponse?: string;
+    finishReason?: string;
+    tokenCount?: number;
+  };
+  duration: number; // ms
 }
 
 export interface Settings {
@@ -92,6 +115,8 @@ export interface Settings {
   apiTier: ApiTier;
   enforceRateLimit: boolean; // If true, block requests that exceed limits
   autoDetectTier: boolean; // If true, try to detect tier from API responses
+  // Debug mode
+  debugMode: boolean; // If true, log all requests/responses
 }
 
 export interface StorageData {
@@ -110,15 +135,17 @@ export const DEFAULT_SETTINGS: Settings = {
     position: 'bl',
     bgColor: '#111111',
     textColor: '#ffffff',
+    bgTransparent: false,
   },
   activeSessionId: null,
   apiTier: 'unknown',
   enforceRateLimit: true,
   autoDetectTier: true,
+  debugMode: false,
 };
 
 export interface GenovaMessage {
-  type: 'GENOVA_RESULT' | 'GENOVA_ERROR';
+  type: 'GENOVA_RESULT' | 'GENOVA_ERROR' | 'GENOVA_LOADING';
   answer?: string;
   error?: string;
   bubbleAppearance?: BubbleAppearance;

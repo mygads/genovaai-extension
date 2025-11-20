@@ -40,20 +40,66 @@ function initShadowDOM(): ShadowRoot {
  */
 chrome.runtime.onMessage.addListener((message: GenovaMessage) => {
   if (message.type === 'GENOVA_RESULT' && message.answer) {
-    showBubble(message.answer, message.bubbleAppearance);
+    showBubble(message.answer, message.bubbleAppearance, false);
   } else if (message.type === 'GENOVA_ERROR' && message.error) {
-    showBubble(`❌ ${message.error}`, {
-      position: 'br',
-      bgColor: '#dc2626',
-      textColor: '#ffffff',
-    });
+    // Show error in same bubble location (not separate red bubble)
+    showBubble(`❌ ${message.error}`, message.bubbleAppearance, true);
+  } else if (message.type === 'GENOVA_LOADING') {
+    // Show loading indicator
+    showLoadingBubble(message.bubbleAppearance);
   }
 });
 
 /**
+ * Show loading bubble
+ */
+function showLoadingBubble(appearance?: BubbleAppearance): void {
+  // Remove existing bubble
+  removeBubble();
+  
+  // Initialize shadow DOM
+  const shadow = initShadowDOM();
+  
+  // Create bubble element
+  const bubble = document.createElement('div');
+  bubble.className = 'genovaai-bubble loading';
+  bubble.innerHTML = '<div class="loading-spinner"></div><span>Loading...</span>';
+
+  // Apply appearance settings
+  if (appearance) {
+    if (appearance.bgTransparent) {
+      bubble.style.backgroundColor = 'transparent';
+      bubble.style.border = 'none';
+      bubble.style.boxShadow = 'none';
+      bubble.style.backdropFilter = 'none';
+      bubble.style.textShadow = '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)';
+    } else {
+      bubble.style.backgroundColor = appearance.bgColor;
+    }
+    bubble.style.color = appearance.textColor;
+    bubble.classList.add(`position-${appearance.position}`);
+  } else {
+    bubble.classList.add('position-bl');
+  }
+
+  // Add to shadow DOM
+  shadow.appendChild(bubble);
+  
+  // Enable pointer events on shadow host
+  if (shadowHost) {
+    shadowHost.style.pointerEvents = 'auto';
+  }
+
+  // Trigger animation
+  requestAnimationFrame(() => {
+    bubble.classList.add('show');
+  });
+}
+
+/**
  * Show answer bubble on the page
  */
-function showBubble(text: string, appearance?: BubbleAppearance): void {
+function showBubble(text: string, appearance?: BubbleAppearance, isError: boolean = false): void {
   // Remove existing bubble
   removeBubble();
   
@@ -63,11 +109,25 @@ function showBubble(text: string, appearance?: BubbleAppearance): void {
   // Create bubble element
   const bubble = document.createElement('div');
   bubble.className = 'genovaai-bubble';
+  if (isError) {
+    bubble.classList.add('error');
+  }
   bubble.textContent = text;
 
   // Apply appearance settings
   if (appearance) {
-    bubble.style.backgroundColor = appearance.bgColor;
+    // Handle transparent background
+    if (appearance.bgTransparent) {
+      bubble.style.backgroundColor = 'transparent';
+      bubble.style.border = 'none';
+      bubble.style.boxShadow = 'none';
+      bubble.style.backdropFilter = 'none';
+      // Add text shadow for better readability
+      bubble.style.textShadow = '0 0 4px rgba(0,0,0,0.8), 0 0 8px rgba(0,0,0,0.6)';
+    } else {
+      // For errors, override with red background
+      bubble.style.backgroundColor = isError ? '#dc2626' : appearance.bgColor;
+    }
     bubble.style.color = appearance.textColor;
     
     // Position classes: bl, br, tl, tr
@@ -75,6 +135,10 @@ function showBubble(text: string, appearance?: BubbleAppearance): void {
   } else {
     // Default appearance
     bubble.classList.add('position-bl');
+    if (isError) {
+      bubble.style.backgroundColor = '#dc2626';
+      bubble.style.color = '#ffffff';
+    }
   }
 
   // Add to shadow DOM

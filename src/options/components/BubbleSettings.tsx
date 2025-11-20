@@ -50,14 +50,32 @@ function BubbleSettings({ bubbleAppearance, onChange }: BubbleSettingsProps) {
                 className="color-input"
                 value={localAppearance.bgColor}
                 onChange={(e) => handleChange({ bgColor: e.target.value })}
+                disabled={localAppearance.bgTransparent}
               />
               <input
                 type="text"
                 className="color-text"
                 value={localAppearance.bgColor}
                 onChange={(e) => handleChange({ bgColor: e.target.value })}
+                disabled={localAppearance.bgTransparent}
               />
             </div>
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              marginTop: '8px',
+              fontSize: '14px',
+              cursor: 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={localAppearance.bgTransparent}
+                onChange={(e) => handleChange({ bgTransparent: e.target.checked })}
+                style={{ cursor: 'pointer' }}
+              />
+              Transparent
+            </label>
           </div>
           <div className="color-picker-wrapper">
             <label>Text</label>
@@ -84,8 +102,9 @@ function BubbleSettings({ bubbleAppearance, onChange }: BubbleSettingsProps) {
         <div
           className="bubble-preview"
           style={{
-            backgroundColor: localAppearance.bgColor,
+            backgroundColor: localAppearance.bgTransparent ? 'transparent' : localAppearance.bgColor,
             color: localAppearance.textColor,
+            border: localAppearance.bgTransparent ? '2px solid #ddd' : 'none',
           }}
         >
           B - Sample answer text
