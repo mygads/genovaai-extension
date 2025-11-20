@@ -53,6 +53,14 @@ export interface SessionHistoryItem {
   answer: string;
   model: string;
   answerMode: AnswerMode;
+  // Request context for debugging (minimal to avoid quota)
+  requestContext?: {
+    systemInstruction: string; // "[1500 chars]" format
+    knowledgeLength: number;   // Length only, content is in session
+    fileCount: number;
+    totalChars: number;
+    estimatedTokens: number;
+  };
 }
 
 export interface ErrorLogItem {

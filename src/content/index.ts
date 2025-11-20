@@ -125,10 +125,16 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
       bubble.style.backdropFilter = 'none';
       // No text shadow for clear readability on transparent background
     } else {
-      // For errors, override with red background
-      bubble.style.backgroundColor = isError ? '#dc2626' : appearance.bgColor;
+      // Use user's configured colors (same for error and success)
+      bubble.style.backgroundColor = appearance.bgColor;
     }
     bubble.style.color = appearance.textColor;
+    
+    // Add red border for errors instead of changing background
+    if (isError) {
+      bubble.style.border = '2px solid #dc2626';
+      bubble.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+    }
     
     // Position classes: bl, br, tl, tr
     bubble.classList.add(`position-${appearance.position}`);
@@ -137,7 +143,7 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
     bubble.classList.add('position-bl');
     if (isError) {
       bubble.style.backgroundColor = '#dc2626';
-      bubble.style.color = '#ffffff';
+      bubble.style.color = '#ffffff'; // White text for red error background
     }
   }
 

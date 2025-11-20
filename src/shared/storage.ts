@@ -185,11 +185,34 @@ export async function addHistoryToSession(
   question: string,
   answer: string,
   model: string,
-  answerMode: string
+  answerMode: string,
+  requestContext?: {
+    systemInstruction: string; // "[1500 chars]" format
+    knowledgeLength: number;   // Length only
+    fileCount: number;
+    totalChars: number;
+    estimatedTokens: number;
+  }
 ): Promise<void> {
   try {
-    console.log('💾 Adding history to session:', sessionId);
+    console.log('💾 [addHistoryToSession] START');
+    console.log('   Session ID:', sessionId);
+    console.log('   Question:', question.substring(0, 50) + '...');
+    console.log('   Answer:', answer.substring(0, 50) + '...');
+    console.log('   Model:', model);
+    console.log('   Mode:', answerMode);
+    console.log('   Has Context:', !!requestContext);
+    
     const sessions = await getSessions();
+    console.log('   Total sessions:', sessions.length);
+    
+    const targetSession = sessions.find(s => s.id === sessionId);
+    if (!targetSession) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+    console.log('   Target session found:', targetSession.name);
+    console.log('   Current history count:', targetSession.history?.length || 0);
+    
     const updatedSessions = sessions.map(s => {
       if (s.id === sessionId) {
         const historyItem = {
@@ -199,19 +222,34 @@ export async function addHistoryToSession(
           answer,
           model,
           answerMode: answerMode as any,
+          requestContext, // Already truncated in background.ts
         };
+        console.log('   Created history item:', historyItem.id);
+        
+        // Keep only last 50 history items per session to prevent quota issues
+        const newHistory = [...(s.history || []), historyItem];
+        if (newHistory.length > 50) {
+          console.log('   Trimming history to last 50 items...');
+          newHistory.splice(0, newHistory.length - 50);
+        }
+        
         return {
           ...s,
-          history: [...(s.history || []), historyItem],
+          history: newHistory,
           dateModified: Date.now(),
         };
       }
       return s;
     });
+    
+    console.log('   Saving updated sessions...');
     await saveSessions(updatedSessions);
-    console.log('✅ History added successfully');
+    console.log('✅ [addHistoryToSession] SUCCESS');
   } catch (error) {
-    console.error('❌ Failed to add history:', error);
+    console.error('❌ [addHistoryToSession] FAILED');
+    console.error('   Error:', error);
+    console.error('   Type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('   Message:', error instanceof Error ? error.message : String(error));
     throw error;
   }
 }
@@ -313,8 +351,16 @@ export async function addDebugLog(
   duration: number
 ): Promise<void> {
   try {
-    console.log('💾 Saving debug log...', { provider, model, duration });
+    console.log('💾 [addDebugLog] START');
+    console.log('   Provider:', provider);
+    console.log('   Model:', model);
+    console.log('   Duration:', duration, 'ms');
+    console.log('   Request keys:', Object.keys(request || {}));
+    console.log('   Response keys:', Object.keys(response || {}));
+    
     const logs = await getDebugLogs();
+    console.log('   Current debug logs count:', logs.length);
+    
     const newLog = {
       id: `debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
@@ -324,10 +370,14 @@ export async function addDebugLog(
       response,
       duration,
     };
+    console.log('   Created debug log:', newLog.id);
+    
     await saveDebugLogs([...logs, newLog]);
-    console.log('✅ Debug log saved');
+    console.log('✅ [addDebugLog] SUCCESS - Total logs:', logs.length + 1);
   } catch (error) {
-    console.error('❌ Failed to save debug log:', error);
+    console.error('❌ [addDebugLog] FAILED:', error);
+    console.error('   Type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('   Message:', error instanceof Error ? error.message : String(error));
   }
 }
 

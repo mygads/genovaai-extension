@@ -141,22 +141,42 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       console.log('✅ Usage updated:', actualTokens, 'tokens');
     }
 
-    // Save to session history
+    // Calculate request context for debugging (minimal to avoid quota)
+    const fullRequest = systemInstruction + knowledgeText + selectedText;
+    const requestContext = {
+      systemInstruction: `[${systemInstruction.length} chars]`, // Only length, not content
+      knowledgeLength: knowledgeText.length, // Only length
+      fileCount: activeSession?.knowledgeFiles?.length || 0,
+      totalChars: fullRequest.length,
+      estimatedTokens: estimateTokens(fullRequest),
+    };
+    
+    console.log('📊 Request Context:', requestContext);
+
+    // Save to history if session exists
     if (activeSession) {
       try {
+        console.log('📝 Saving history to session:', activeSession.name);
         await addHistoryToSession(
           activeSession.id,
           selectedText,
           answer,
           settings.selectedModel,
-          settings.useCustomPrompt ? 'custom' : settings.answerMode
+          settings.useCustomPrompt ? 'custom' : settings.answerMode,
+          requestContext
         );
-        console.log('✅ History saved to active session:', activeSession.name);
+        console.log('✅ History saved successfully');
       } catch (histError) {
         console.error('❌ Failed to save history:', histError);
+        console.error('   Error details:', {
+          name: histError instanceof Error ? histError.name : 'Unknown',
+          message: histError instanceof Error ? histError.message : String(histError),
+          stack: histError instanceof Error ? histError.stack : 'No stack',
+        });
       }
     } else {
-      console.warn('⚠️ No active session - history not saved. Please create/activate a session in Settings.');
+      console.warn('⚠️ No active session - history not saved.');
+      console.warn('   Please create and activate a session in Settings → Sessions tab');
     }
 
     // Send result to content script
@@ -199,17 +219,39 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (activeSession) {
       try {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Rebuild system instruction for error case
+        const errorSystemInstruction = buildSystemInstruction(
+          settings?.useCustomPrompt || false,
+          settings?.userPrompt || '',
+          settings?.answerMode || 'short'
+        );
+        
+        // Calculate request context (minimal to avoid quota)
+        const fullRequest = errorSystemInstruction + (activeSession.knowledgeText || '') + selectedText;
+        const requestContext = {
+          systemInstruction: `[${errorSystemInstruction.length} chars]`,
+          knowledgeLength: (activeSession.knowledgeText || '').length,
+          fileCount: activeSession.knowledgeFiles?.length || 0,
+          totalChars: fullRequest.length,
+          estimatedTokens: estimateTokens(fullRequest),
+        };
+        
+        console.log('📝 Saving error to history...');
         await addHistoryToSession(
           activeSession.id,
           selectedText,
           `ERROR: ${errorMessage}`,
           settings?.selectedModel || 'unknown',
-          settings?.useCustomPrompt ? 'custom' : settings?.answerMode || 'short'
+          settings?.useCustomPrompt ? 'custom' : settings?.answerMode || 'short',
+          requestContext
         );
         console.log('✅ Failed request saved to history');
       } catch (histError) {
         console.error('❌ Failed to save error to history:', histError);
       }
+    } else {
+      console.warn('⚠️ No active session - error not saved to history');
     }
     
     const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan';
