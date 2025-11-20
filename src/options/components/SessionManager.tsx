@@ -31,6 +31,7 @@ function SessionManager({ sessions, activeSessionId, onSessionsUpdate, onActiveS
       knowledgeText: knowledgeText.trim(),
       knowledgeFiles: knowledgeFiles,
       dateModified: Date.now(),
+      history: [],
     };
 
     const updatedSessions = [...sessions, newSession];

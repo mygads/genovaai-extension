@@ -1,8 +1,15 @@
 // PDF extraction utility using pdfjs-dist
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Set worker source
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Set worker source to bundled version
+// This avoids CSP violations by using the bundled worker
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  // In extension context, use bundled worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.min.js');
+} else {
+  // Fallback for development
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+}
 
 /**
  * Extract text from PDF file
@@ -28,6 +35,20 @@ export async function extractTextFromPDF(file: File): Promise<string> {
     return fullText.trim();
   } catch (error) {
     console.error('Error extracting PDF text:', error);
+    
+    // Log error to storage
+    try {
+      const { addErrorLog } = await import('./storage');
+      await addErrorLog(
+        'pdf_csp',
+        error instanceof Error ? error.message : 'PDF extraction failed',
+        `File: ${file.name}, Size: ${file.size}`,
+        error instanceof Error ? error.stack : undefined
+      );
+    } catch (logError) {
+      console.error('Failed to log PDF error:', logError);
+    }
+    
     throw new Error('Gagal membaca file PDF');
   }
 }

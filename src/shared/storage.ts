@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from './types';
 const STORAGE_KEYS = {
   SETTINGS: 'genovaai_settings',
   SESSIONS: 'genovaai_sessions',
+  ERROR_LOGS: 'genovaai_error_logs',
 };
 
 /**
@@ -75,7 +76,13 @@ export async function saveSettings(settings: Settings): Promise<void> {
 export async function getSessions(): Promise<Session[]> {
   try {
     const result = await chrome.storage.sync.get(STORAGE_KEYS.SESSIONS);
-    return (result[STORAGE_KEYS.SESSIONS] as Session[]) || [];
+    const sessions = (result[STORAGE_KEYS.SESSIONS] as Session[]) || [];
+    
+    // Initialize history array for sessions that don't have it
+    return sessions.map(s => ({
+      ...s,
+      history: s.history || [],
+    }));
   } catch (error) {
     console.error('Error getting sessions:', error);
     return [];
@@ -157,4 +164,90 @@ export async function deleteSession(sessionId: string): Promise<void> {
 export async function setActiveSession(sessionId: string | null): Promise<void> {
   const settings = await getSettings();
   await saveSettings({ ...settings, activeSessionId: sessionId });
+}
+
+/**
+ * Add history item to a session
+ */
+export async function addHistoryToSession(
+  sessionId: string,
+  question: string,
+  answer: string,
+  model: string,
+  answerMode: string
+): Promise<void> {
+  const sessions = await getSessions();
+  const updatedSessions = sessions.map(s => {
+    if (s.id === sessionId) {
+      const historyItem = {
+        id: `hist_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: Date.now(),
+        question,
+        answer,
+        model,
+        answerMode: answerMode as any,
+      };
+      return {
+        ...s,
+        history: [...(s.history || []), historyItem],
+        dateModified: Date.now(),
+      };
+    }
+    return s;
+  });
+  await saveSessions(updatedSessions);
+}
+
+/**
+ * Get error logs from chrome.storage.local
+ */
+export async function getErrorLogs(): Promise<any[]> {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.ERROR_LOGS);
+    return (result[STORAGE_KEYS.ERROR_LOGS] as any[]) || [];
+  } catch (error) {
+    console.error('Error getting error logs:', error);
+    return [];
+  }
+}
+
+/**
+ * Save error logs to chrome.storage.local
+ */
+export async function saveErrorLogs(logs: any[]): Promise<void> {
+  try {
+    // Keep only last 100 errors
+    const limitedLogs = logs.slice(-100);
+    await chrome.storage.local.set({ [STORAGE_KEYS.ERROR_LOGS]: limitedLogs });
+  } catch (error) {
+    console.error('Error saving error logs:', error);
+  }
+}
+
+/**
+ * Add error log
+ */
+export async function addErrorLog(
+  type: string,
+  message: string,
+  details?: string,
+  stack?: string
+): Promise<void> {
+  const logs = await getErrorLogs();
+  const newLog = {
+    id: `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    timestamp: Date.now(),
+    type,
+    message,
+    details,
+    stack,
+  };
+  await saveErrorLogs([...logs, newLog]);
+}
+
+/**
+ * Clear error logs
+ */
+export async function clearErrorLogs(): Promise<void> {
+  await saveErrorLogs([]);
 }

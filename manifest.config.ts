@@ -35,4 +35,8 @@ export default defineManifest({
     },
     default_title: 'GenovaAI Settings',
   },
+  web_accessible_resources: [{
+    resources: ['pdf.worker.min.js'],
+    matches: ['<all_urls>'],
+  }],
 })

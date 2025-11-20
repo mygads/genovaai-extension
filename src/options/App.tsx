@@ -8,12 +8,17 @@ import CustomPromptSettings from './components/CustomPromptSettings';
 import BubbleSettings from './components/BubbleSettings';
 import SessionManager from './components/SessionManager';
 import { UsageMonitor } from './components/UsageMonitor';
+import HistoryViewer from './components/HistoryViewer';
+import ErrorLogViewer from './components/ErrorLogViewer';
 import './styles.css';
+
+type TabType = 'settings' | 'history' | 'errors';
 
 function App() {
   const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [saveMessage, setSaveMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('settings');
 
   useEffect(() => {
     loadData();
@@ -78,77 +83,155 @@ function App() {
         )}
       </div>
 
+      {/* Tab Navigation */}
+      <div style={{
+        display: 'flex',
+        gap: '5px',
+        borderBottom: '2px solid #e0e0e0',
+        padding: '0 30px',
+        background: 'white',
+      }}>
+        <button
+          onClick={() => setActiveTab('settings')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'settings' ? '3px solid #4CAF50' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'settings' ? '600' : '500',
+            color: activeTab === 'settings' ? '#4CAF50' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaCog style={{ marginRight: '8px' }} />
+          Settings
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'history' ? '3px solid #2196F3' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'history' ? '600' : '500',
+            color: activeTab === 'history' ? '#2196F3' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaBook style={{ marginRight: '8px' }} />
+          History
+        </button>
+        <button
+          onClick={() => setActiveTab('errors')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'errors' ? '3px solid #F44336' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'errors' ? '600' : '500',
+            color: activeTab === 'errors' ? '#F44336' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaPalette style={{ marginRight: '8px' }} />
+          Error Logs
+        </button>
+      </div>
+
       <div className="app-content">
-        <div className="settings-grid">
-          <section className="settings-card">
-            <div className="card-header">
-              <FaRobot className="card-icon" />
-              <h2>LLM Provider</h2>
-            </div>
-            <ProviderSettings
-              provider={settings.provider}
-              apiKey={settings.apiKey}
-              selectedModel={settings.selectedModel}
-              onChange={(provider: any, apiKey: string, selectedModel: any) => 
-                handleSettingsChange({ provider, apiKey, selectedModel })
-              }
-            />
-          </section>
-
-          <section className="settings-card">
-            <div className="card-header">
-              <FaComments className="card-icon" />
-              <h2>Prompt Configuration</h2>
-            </div>
-            <CustomPromptSettings
-              useCustomPrompt={settings.useCustomPrompt}
-              userPrompt={settings.userPrompt}
-              answerMode={settings.answerMode}
-              onChange={(useCustomPrompt: boolean, userPrompt: string, answerMode: any) => 
-                handleSettingsChange({ useCustomPrompt, userPrompt, answerMode })
-              }
-            />
-          </section>
-
-          <section className="settings-card">
-            <div className="card-header">
-              <FaPalette className="card-icon" />
-              <h2>Bubble Appearance</h2>
-            </div>
-            <BubbleSettings
-              bubbleAppearance={settings.bubbleAppearance}
-              onChange={(bubbleAppearance: any) => handleSettingsChange({ bubbleAppearance })}
-            />
-          </section>
-
-          <section className="settings-card full-width">
-            <div className="card-header">
-              <FaBook className="card-icon" />
-              <h2>Knowledge Sessions</h2>
-            </div>
-            <SessionManager
-              sessions={sessions}
-              activeSessionId={settings.activeSessionId}
-              onSessionsUpdate={handleSessionsUpdate}
-              onActiveSessionChange={(sessionId: string | null) => 
-                handleSettingsChange({ activeSessionId: sessionId })
-              }
-            />
-          </section>
-
-          {/* Usage Monitor - Only show for Gemini provider */}
-          {settings.provider === 'gemini' && (
-            <section className="settings-card full-width">
-              <UsageMonitor
-                settings={settings}
-                onTierChange={(tier: ApiTier) => handleSettingsChange({ apiTier: tier })}
-                onEnforceLimitChange={(enforce: boolean) => 
-                  handleSettingsChange({ enforceRateLimit: enforce })
+        {/* Settings Tab */}
+        {activeTab === 'settings' && (
+          <div className="settings-grid">
+            <section className="settings-card">
+              <div className="card-header">
+                <FaRobot className="card-icon" />
+                <h2>LLM Provider</h2>
+              </div>
+              <ProviderSettings
+                provider={settings.provider}
+                apiKey={settings.apiKey}
+                selectedModel={settings.selectedModel}
+                onChange={(provider: any, apiKey: string, selectedModel: any) => 
+                  handleSettingsChange({ provider, apiKey, selectedModel })
                 }
               />
             </section>
-          )}
-        </div>
+
+            <section className="settings-card">
+              <div className="card-header">
+                <FaComments className="card-icon" />
+                <h2>Prompt Configuration</h2>
+              </div>
+              <CustomPromptSettings
+                useCustomPrompt={settings.useCustomPrompt}
+                userPrompt={settings.userPrompt}
+                answerMode={settings.answerMode}
+                onChange={(useCustomPrompt: boolean, userPrompt: string, answerMode: any) => 
+                  handleSettingsChange({ useCustomPrompt, userPrompt, answerMode })
+                }
+              />
+            </section>
+
+            <section className="settings-card">
+              <div className="card-header">
+                <FaPalette className="card-icon" />
+                <h2>Bubble Appearance</h2>
+              </div>
+              <BubbleSettings
+                bubbleAppearance={settings.bubbleAppearance}
+                onChange={(bubbleAppearance: any) => handleSettingsChange({ bubbleAppearance })}
+              />
+            </section>
+
+            <section className="settings-card full-width">
+              <div className="card-header">
+                <FaBook className="card-icon" />
+                <h2>Knowledge Sessions</h2>
+              </div>
+              <SessionManager
+                sessions={sessions}
+                activeSessionId={settings.activeSessionId}
+                onSessionsUpdate={handleSessionsUpdate}
+                onActiveSessionChange={(sessionId: string | null) => 
+                  handleSettingsChange({ activeSessionId: sessionId })
+                }
+              />
+            </section>
+
+            {/* Usage Monitor - Only show for Gemini provider */}
+            {settings.provider === 'gemini' && (
+              <section className="settings-card full-width">
+                <UsageMonitor
+                  settings={settings}
+                  onTierChange={(tier: ApiTier) => handleSettingsChange({ apiTier: tier })}
+                  onEnforceLimitChange={(enforce: boolean) => 
+                    handleSettingsChange({ enforceRateLimit: enforce })
+                  }
+                />
+              </section>
+            )}
+          </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+          <div className="settings-card full-width">
+            <HistoryViewer />
+          </div>
+        )}
+
+        {/* Error Logs Tab */}
+        {activeTab === 'errors' && (
+          <div className="settings-card full-width">
+            <ErrorLogViewer />
+          </div>
+        )}
       </div>
 
       <footer className="app-footer">

@@ -46,12 +46,31 @@ export interface KnowledgeFile {
   mimeType?: string; // MIME type for File API
 }
 
+export interface SessionHistoryItem {
+  id: string;
+  timestamp: number;
+  question: string;
+  answer: string;
+  model: string;
+  answerMode: AnswerMode;
+}
+
+export interface ErrorLogItem {
+  id: string;
+  timestamp: number;
+  type: 'pdf_csp' | 'api_error' | 'upload_error' | 'general';
+  message: string;
+  details?: string;
+  stack?: string;
+}
+
 export interface Session {
   id: string;
   name: string;
   knowledgeText: string;
   knowledgeFiles: KnowledgeFile[];
   dateModified: number;
+  history: SessionHistoryItem[];
 }
 
 export interface BubbleAppearance {

@@ -1,5 +1,5 @@
 // Background service worker for GenovaAI Extension
-import { getSettings, getActiveSession } from '../shared/storage';
+import { getSettings, getActiveSession, addHistoryToSession, addErrorLog } from '../shared/storage';
 import { callLLM, buildSystemInstruction } from '../shared/api';
 import type { GenovaMessage, GeminiModel } from '../shared/types';
 import {
@@ -35,11 +35,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     return;
   }
 
+  // Get settings and active session
+  let settings;
+  let activeSession;
+  
   try {
-    // Get settings and active session
-    const settings = await getSettings();
-    const activeSession = await getActiveSession();
+    settings = await getSettings();
+    activeSession = await getActiveSession();
+  } catch (error) {
+    console.error('Failed to get settings:', error);
+    sendErrorToTab(tab.id, 'Gagal memuat pengaturan');
+    return;
+  }
 
+  try {
     // Validate API key
     if (!settings.apiKey || settings.apiKey.trim() === '') {
       sendErrorToTab(tab.id, 'API key belum diatur di Settings.');
@@ -118,6 +127,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     console.log('Answer received:', answer);
 
+    // Save to session history
+    if (activeSession) {
+      try {
+        await addHistoryToSession(
+          activeSession.id,
+          selectedText,
+          answer,
+          settings.selectedModel,
+          settings.useCustomPrompt ? 'custom' : settings.answerMode
+        );
+        console.log('History saved to session');
+      } catch (histError) {
+        console.error('Failed to save history:', histError);
+      }
+    }
+
     // Send result to content script
     const message: GenovaMessage = {
       type: 'GENOVA_RESULT',
@@ -133,6 +158,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : 'No stack trace'
     });
+    
+    // Log error to storage
+    try {
+      await addErrorLog(
+        'api_error',
+        error instanceof Error ? error.message : String(error),
+        `Provider: ${settings?.provider || 'unknown'}, Model: ${settings?.selectedModel || 'unknown'}`,
+        error instanceof Error ? error.stack : undefined
+      );
+    } catch (logError) {
+      console.error('Failed to log error:', logError);
+    }
     
     const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan';
     sendErrorToTab(tab.id, errorMessage);

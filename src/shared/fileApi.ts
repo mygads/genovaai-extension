@@ -14,6 +14,7 @@ export interface UploadedFile {
 /**
  * Upload file to Gemini File API
  * Supports PDF files for native visual understanding
+ * Uses resumable upload protocol as per Gemini API docs
  */
 export async function uploadFileToGemini(
   apiKey: string,
@@ -21,54 +22,84 @@ export async function uploadFileToGemini(
   fileName: string,
   mimeType: string
 ): Promise<UploadedFile> {
-  // Convert ArrayBuffer to base64
-  const base64Data = arrayBufferToBase64(fileData);
-  
-  // Upload file using multipart form data
-  const url = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
+  // Step 1: Initiate resumable upload and get upload URL
+  const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
   
   const metadata = {
     file: {
       displayName: fileName,
-      mimeType: mimeType,
     }
   };
   
-  // Create multipart request body
-  const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-  const bodyParts: string[] = [];
-  
-  // Add metadata part
-  bodyParts.push(
-    `--${boundary}\r\n` +
-    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-    `${JSON.stringify(metadata)}\r\n`
-  );
-  
-  // Add file data part
-  bodyParts.push(
-    `--${boundary}\r\n` +
-    `Content-Type: ${mimeType}\r\n` +
-    `Content-Transfer-Encoding: base64\r\n\r\n` +
-    `${base64Data}\r\n` +
-    `--${boundary}--\r\n`
-  );
-  
-  const response = await fetch(url, {
+  const initResponse = await fetch(initUrl, {
     method: 'POST',
     headers: {
-      'Content-Type': `multipart/related; boundary=${boundary}`,
+      'X-Goog-Upload-Protocol': 'resumable',
+      'X-Goog-Upload-Command': 'start',
+      'X-Goog-Upload-Header-Content-Length': String(fileData.byteLength),
+      'X-Goog-Upload-Header-Content-Type': mimeType,
+      'Content-Type': 'application/json',
     },
-    body: bodyParts.join(''),
+    body: JSON.stringify(metadata),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`File upload error: ${response.status} - ${JSON.stringify(errorData)}`);
+  if (!initResponse.ok) {
+    const errorData = await initResponse.text();
+    
+    // Log error to storage
+    try {
+      const { addErrorLog } = await import('./storage');
+      await addErrorLog(
+        'upload_error',
+        `File upload init failed: ${initResponse.status}`,
+        errorData,
+        undefined
+      );
+    } catch (logError) {
+      console.error('Failed to log upload error:', logError);
+    }
+    
+    throw new Error(`File upload init error: ${initResponse.status} - ${errorData}`);
+  }
+  
+  // Get upload URL from response header
+  const uploadUrl = initResponse.headers.get('X-Goog-Upload-URL');
+  if (!uploadUrl) {
+    throw new Error('No upload URL returned from Gemini API');
+  }
+  
+  // Step 2: Upload the actual file data
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Length': String(fileData.byteLength),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize',
+    },
+    body: fileData,
+  });
+
+  if (!uploadResponse.ok) {
+    const errorData = await uploadResponse.text();
+    
+    // Log error to storage
+    try {
+      const { addErrorLog } = await import('./storage');
+      await addErrorLog(
+        'upload_error',
+        `File upload failed: ${uploadResponse.status}`,
+        errorData,
+        undefined
+      );
+    } catch (logError) {
+      console.error('Failed to log upload error:', logError);
+    }
+    
+    throw new Error(`File upload error: ${uploadResponse.status} - ${errorData}`);
   }
 
-  const uploadedFile = await response.json() as { file: UploadedFile };
-  return uploadedFile.file;
+  const result = await uploadResponse.json() as { file: UploadedFile };
+  return result.file;
 }
 
 /**
@@ -148,18 +179,6 @@ export async function listFiles(apiKey: string): Promise<UploadedFile[]> {
 
   const data = await response.json() as { files: UploadedFile[] };
   return data.files || [];
-}
-
-/**
- * Convert ArrayBuffer to base64 string
- */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
 }
 
 /**
