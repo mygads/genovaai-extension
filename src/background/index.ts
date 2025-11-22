@@ -1,14 +1,7 @@
-// Background service worker for GenovaAI Extension
-import { getSettings, getActiveSession, addHistoryToSession, addErrorLog } from '../shared/storage';
-import { callLLM, buildSystemInstruction } from '../shared/api';
-import type { GenovaMessage, GeminiModel } from '../shared/types';
-import {
-  getUsageData,
-  resetUsageIfNeeded,
-  checkRateLimit,
-  updateUsage,
-  estimateTokens,
-} from '../shared/rateLimits';
+// Background service worker for GenovaAI Extension (Backend Integration)
+import { isAuthenticated, getCurrentSessionId } from '../shared/storage';
+import { askQuestion, refreshAccessToken } from '../shared/api';
+import type { GenovaMessage } from '../shared/types';
 
 const CONTEXT_MENU_ID = 'genovaai-analyze';
 
@@ -19,8 +12,44 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'GenovaAI',
     contexts: ['selection'],
   });
+
+  // Set up token refresh alarm (every 10 minutes)
+  chrome.alarms.create('refreshToken', { periodInMinutes: 10 });
   
-  console.log('GenovaAI Extension installed');
+  console.log('GenovaAI Extension (Backend) installed');
+});
+
+// Handle token refresh alarm
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'refreshToken') {
+    const isAuth = await isAuthenticated();
+    if (isAuth) {
+      console.log('🔄 Auto-refreshing access token...');
+      const success = await refreshAccessToken();
+      if (success) {
+        console.log('✅ Token refreshed successfully');
+      } else {
+        console.error('❌ Token refresh failed');
+      }
+    }
+  }
+});
+
+// Handle messages from content script
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type === 'CHECK_AUTH') {
+    isAuthenticated().then((isAuth) => {
+      sendResponse({ authenticated: isAuth });
+    });
+    return true; // Keep channel open for async response
+  }
+  
+  if (request.type === 'GET_SESSION_ID') {
+    getCurrentSessionId().then((sessionId) => {
+      sendResponse({ sessionId });
+    });
+    return true;
+  }
 });
 
 // Handle context menu clicks
@@ -31,159 +60,55 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   const selectedText = info.selectionText;
   if (!selectedText || selectedText.trim() === '') {
-    sendErrorToTab(tab.id, 'Tidak ada teks yang dipilih');
-    return;
-  }
-
-  // Get settings and active session
-  let settings;
-  let activeSession;
-  
-  try {
-    settings = await getSettings();
-    activeSession = await getActiveSession();
-  } catch (error) {
-    console.error('Failed to get settings:', error);
-    sendErrorToTab(tab.id, 'Gagal memuat pengaturan');
+    sendErrorToTab(tab.id, 'No text selected');
     return;
   }
 
   try {
-    // Validate API key
-    if (!settings.apiKey || settings.apiKey.trim() === '') {
-      sendErrorToTab(tab.id, 'API key belum diatur di Settings.');
+    // Check authentication
+    const isAuth = await isAuthenticated();
+    if (!isAuth) {
+      sendErrorToTab(tab.id, 'Please login first');
       return;
     }
 
-    // Rate limiting check (only for Gemini provider)
-    if (settings.provider === 'gemini' && settings.enforceRateLimit) {
-      const usage = await resetUsageIfNeeded(await getUsageData());
-      
-      // Estimate tokens for this request
-      const knowledgeText = activeSession?.knowledgeText || '';
-      const estimatedTokens = estimateTokens(
-        buildSystemInstruction(settings.useCustomPrompt, settings.userPrompt, settings.answerMode) +
-        knowledgeText +
-        selectedText
-      );
-
-      // Check rate limit
-      const rateCheck = checkRateLimit(
-        settings.apiTier,
-        settings.selectedModel as GeminiModel,
-        usage,
-        estimatedTokens
-      );
-
-      if (!rateCheck.allowed) {
-        sendErrorToTab(tab.id, rateCheck.reason || 'Rate limit exceeded');
-        return;
-      }
+    // Get current session
+    const sessionId = await getCurrentSessionId();
+    if (!sessionId) {
+      sendErrorToTab(tab.id, 'No active session. Please set an active session in Settings.');
+      return;
     }
 
-    // Build knowledge from active session
-    let knowledgeText = '';
-    if (activeSession) {
-      knowledgeText = activeSession.knowledgeText || '';
-    }
-
-    // Build system instruction based on custom prompt setting
-    const systemInstruction = buildSystemInstruction(
-      settings.useCustomPrompt,
-      settings.userPrompt,
-      settings.answerMode
-    );
-
-    console.log('Processing question with GenovaAI...');
-    console.log('Provider:', settings.provider);
-    console.log('Model:', settings.selectedModel);
-    console.log('Tier:', settings.apiTier);
-    console.log('Rate Limiting:', settings.enforceRateLimit ? 'Enabled' : 'Disabled');
-    console.log('Custom Prompt:', settings.useCustomPrompt);
-    console.log('Answer Mode:', settings.useCustomPrompt ? 'N/A (custom)' : settings.answerMode);
-    console.log('Active Session:', activeSession?.name || 'None');
-    console.log('Knowledge Files:', activeSession?.knowledgeFiles?.length || 0);
-    console.log('Debug Mode:', settings.debugMode ? 'Enabled' : 'Disabled');
+    console.log('🚀 Processing question with GenovaAI (Backend)...');
+    console.log('📝 Session ID:', sessionId);
+    console.log('📝 Question:', selectedText.substring(0, 100) + '...');
 
     // Show loading indicator
     try {
       await chrome.tabs.sendMessage(tab.id, {
         type: 'GENOVA_LOADING',
-        bubbleAppearance: settings.bubbleAppearance,
       } as GenovaMessage);
       console.log('✨ Loading indicator sent');
     } catch (loadingError) {
       console.warn('⚠️ Could not send loading indicator:', loadingError);
     }
 
-    // Call LLM API with multimodal support
-    const answer = await callLLM({
-      provider: settings.provider,
-      apiKey: settings.apiKey,
-      model: settings.selectedModel,
-      systemInstruction,
-      knowledgeText,
-      knowledgeFiles: activeSession?.knowledgeFiles,
-      question: selectedText,
-      debugMode: settings.debugMode,
-    });
+    // Call backend API
+    const result = await askQuestion(sessionId, selectedText);
 
-    console.log('Answer received:', answer);
-
-    // Update usage tracking (only for Gemini)
-    if (settings.provider === 'gemini') {
-      // Estimate actual tokens (answer + prompt)
-      const actualTokens = estimateTokens(systemInstruction + knowledgeText + selectedText + answer);
-      
-      // Note: In a real implementation, you would get actual token count from API response
-      // For now, we use estimation
-      await updateUsage(actualTokens);
-      console.log('✅ Usage updated:', actualTokens, 'tokens');
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to get answer');
     }
 
-    // Calculate request context for debugging (minimal to avoid quota)
-    const fullRequest = systemInstruction + knowledgeText + selectedText;
-    const requestContext = {
-      systemInstruction: `[${systemInstruction.length} chars]`, // Only length, not content
-      knowledgeLength: knowledgeText.length, // Only length
-      fileCount: activeSession?.knowledgeFiles?.length || 0,
-      totalChars: fullRequest.length,
-      estimatedTokens: estimateTokens(fullRequest),
-    };
-    
-    console.log('📊 Request Context:', requestContext);
+    const answer = result.data?.answer || 'No answer received';
 
-    // Save to history if session exists
-    if (activeSession) {
-      try {
-        console.log('📝 Saving history to session:', activeSession.name);
-        await addHistoryToSession(
-          activeSession.id,
-          selectedText,
-          answer,
-          settings.selectedModel,
-          settings.useCustomPrompt ? 'custom' : settings.answerMode,
-          requestContext
-        );
-        console.log('✅ History saved successfully');
-      } catch (histError) {
-        console.error('❌ Failed to save history:', histError);
-        console.error('   Error details:', {
-          name: histError instanceof Error ? histError.name : 'Unknown',
-          message: histError instanceof Error ? histError.message : String(histError),
-          stack: histError instanceof Error ? histError.stack : 'No stack',
-        });
-      }
-    } else {
-      console.warn('⚠️ No active session - history not saved.');
-      console.warn('   Please create and activate a session in Settings → Sessions tab');
-    }
+    console.log('✅ Answer received from backend');
+    console.log('📊 History ID:', result.data?.historyId);
 
     // Send result to content script
     const message: GenovaMessage = {
       type: 'GENOVA_RESULT',
       answer,
-      bubbleAppearance: settings.bubbleAppearance,
     };
 
     try {
@@ -191,7 +116,6 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       console.log('✅ Message sent to tab successfully');
     } catch (sendError) {
       console.error('Failed to send message to tab:', sendError);
-      // Content script might not be injected, try to communicate anyway
       console.warn('Content script may not be available on this page');
     }
   } catch (error) {
@@ -202,59 +126,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       stack: error instanceof Error ? error.stack : 'No stack trace'
     });
     
-    // Log error to storage
-    try {
-      await addErrorLog(
-        'api_error',
-        error instanceof Error ? error.message : String(error),
-        `Provider: ${settings?.provider || 'unknown'}, Model: ${settings?.selectedModel || 'unknown'}`,
-        error instanceof Error ? error.stack : undefined
-      );
-      console.log('✅ Error log saved');
-    } catch (logError) {
-      console.error('❌ Failed to log error:', logError);
-    }
-    
-    // Save failed request to history if session exists
-    if (activeSession) {
-      try {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        
-        // Rebuild system instruction for error case
-        const errorSystemInstruction = buildSystemInstruction(
-          settings?.useCustomPrompt || false,
-          settings?.userPrompt || '',
-          settings?.answerMode || 'short'
-        );
-        
-        // Calculate request context (minimal to avoid quota)
-        const fullRequest = errorSystemInstruction + (activeSession.knowledgeText || '') + selectedText;
-        const requestContext = {
-          systemInstruction: `[${errorSystemInstruction.length} chars]`,
-          knowledgeLength: (activeSession.knowledgeText || '').length,
-          fileCount: activeSession.knowledgeFiles?.length || 0,
-          totalChars: fullRequest.length,
-          estimatedTokens: estimateTokens(fullRequest),
-        };
-        
-        console.log('📝 Saving error to history...');
-        await addHistoryToSession(
-          activeSession.id,
-          selectedText,
-          `ERROR: ${errorMessage}`,
-          settings?.selectedModel || 'unknown',
-          settings?.useCustomPrompt ? 'custom' : settings?.answerMode || 'short',
-          requestContext
-        );
-        console.log('✅ Failed request saved to history');
-      } catch (histError) {
-        console.error('❌ Failed to save error to history:', histError);
-      }
-    } else {
-      console.warn('⚠️ No active session - error not saved to history');
-    }
-    
-    const errorMessage = error instanceof Error ? error.message : 'Terjadi kesalahan';
+    const errorMessage = error instanceof Error ? error.message : 'An error occurred';
     await sendErrorToTab(tab.id, errorMessage);
   }
 });
@@ -282,4 +154,4 @@ chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
 
-console.log('GenovaAI Background Service Worker loaded');
+console.log('GenovaAI Background Service Worker (Backend) loaded');

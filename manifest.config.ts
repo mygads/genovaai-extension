@@ -3,9 +3,9 @@ import pkg from './package.json'
 
 export default defineManifest({
   manifest_version: 3,
-  name: 'GenovaAI - Smart Quiz Assistant',
+  name: 'GenovaAI v2 - Smart Quiz Assistant',
   version: pkg.version,
-  description: 'AI-powered quiz assistant with context menu integration',
+  description: 'AI-powered quiz assistant with backend integration',
   icons: {
     48: 'public/logo.png',
   },
@@ -14,10 +14,10 @@ export default defineManifest({
     'storage',
     'activeTab',
     'scripting',
+    'alarms', // For token refresh
   ],
   host_permissions: [
-    'https://openrouter.ai/*',
-    'https://generativelanguage.googleapis.com/*',
+    'http://localhost:3000/*', // Backend API
   ],
   background: {
     service_worker: 'src/background/index.ts',
@@ -35,8 +35,4 @@ export default defineManifest({
     },
     default_title: 'GenovaAI Settings',
   },
-  web_accessible_resources: [{
-    resources: ['pdf.worker.min.js'],
-    matches: ['<all_urls>'],
-  }],
 })

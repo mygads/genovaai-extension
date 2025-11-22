@@ -1,13 +1,46 @@
 // Content script for GenovaAI Extension
-import type { GenovaMessage, BubbleAppearance } from '../shared/types';
+import type { GenovaMessage } from '../shared/types';
 import bubbleStyles from './bubble.css?inline';
 
 const BUBBLE_ID = 'genovaai-bubble-container';
-const BUBBLE_DISPLAY_DURATION = 3000; // 3 seconds
+const STORAGE_KEY = 'genovaai_bubble_preferences';
+
+interface BubblePreferences {
+  position: 'bl' | 'br' | 'tl' | 'tr';
+  bgColor: string;
+  textColor: string;
+  bgTransparent: boolean;
+  duration: number;
+}
+
+const DEFAULT_PREFERENCES: BubblePreferences = {
+  position: 'bl',
+  bgColor: '#000000',
+  textColor: '#ffffff',
+  bgTransparent: false,
+  duration: 3000,
+};
 
 let shadowHost: HTMLElement | null = null;
 let shadowRoot: ShadowRoot | null = null;
 let hideTimeout: number | null = null;
+let bubblePreferences: BubblePreferences = DEFAULT_PREFERENCES;
+
+// Load bubble preferences from storage
+async function loadBubblePreferences(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get(STORAGE_KEY);
+    if (result[STORAGE_KEY]) {
+      bubblePreferences = result[STORAGE_KEY] as BubblePreferences;
+      console.log('✅ Bubble preferences loaded:', bubblePreferences);
+    }
+  } catch (error) {
+    console.error('❌ Error loading bubble preferences:', error);
+  }
+}
+
+// Load preferences on script initialization
+loadBubblePreferences();
 
 /**
  * Initialize Shadow DOM for bubble
@@ -40,20 +73,18 @@ function initShadowDOM(): ShadowRoot {
  */
 chrome.runtime.onMessage.addListener((message: GenovaMessage) => {
   if (message.type === 'GENOVA_RESULT' && message.answer) {
-    showBubble(message.answer, message.bubbleAppearance, false);
+    showBubble(message.answer, false);
   } else if (message.type === 'GENOVA_ERROR' && message.error) {
-    // Show only "Error" on screen (full error is saved in history)
-    showBubble('Error', message.bubbleAppearance, true);
+    showBubble('Error', true);
   } else if (message.type === 'GENOVA_LOADING') {
-    // Show loading indicator
-    showLoadingBubble(message.bubbleAppearance);
+    showLoadingBubble();
   }
 });
 
 /**
  * Show loading bubble
  */
-function showLoadingBubble(appearance?: BubbleAppearance): void {
+function showLoadingBubble(): void {
   // Remove existing bubble
   removeBubble();
   
@@ -63,25 +94,19 @@ function showLoadingBubble(appearance?: BubbleAppearance): void {
   // Create bubble element
   const bubble = document.createElement('div');
   bubble.className = 'genovaai-bubble loading';
-  // Only show spinner, no text
   bubble.innerHTML = '<div class="loading-spinner"></div>';
 
-  // Apply appearance settings
-  if (appearance) {
-    if (appearance.bgTransparent) {
-      bubble.style.backgroundColor = 'transparent';
-      bubble.style.border = 'none';
-      bubble.style.boxShadow = 'none';
-      bubble.style.backdropFilter = 'none';
-      // No text shadow for transparent
-    } else {
-      bubble.style.backgroundColor = appearance.bgColor;
-    }
-    bubble.style.color = appearance.textColor;
-    bubble.classList.add(`position-${appearance.position}`);
+  // Apply user preferences
+  if (bubblePreferences.bgTransparent) {
+    bubble.style.backgroundColor = 'transparent';
+    bubble.style.border = 'none';
+    bubble.style.boxShadow = 'none';
+    bubble.style.backdropFilter = 'none';
   } else {
-    bubble.classList.add('position-bl');
+    bubble.style.backgroundColor = bubblePreferences.bgColor;
   }
+  bubble.style.color = bubblePreferences.textColor;
+  bubble.classList.add(`position-${bubblePreferences.position}`);
 
   // Add to shadow DOM
   shadow.appendChild(bubble);
@@ -100,7 +125,7 @@ function showLoadingBubble(appearance?: BubbleAppearance): void {
 /**
  * Show answer bubble on the page
  */
-function showBubble(text: string, appearance?: BubbleAppearance, isError: boolean = false): void {
+function showBubble(text: string, isError: boolean = false): void {
   // Remove existing bubble
   removeBubble();
   
@@ -115,38 +140,25 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
   }
   bubble.textContent = text;
 
-  // Apply appearance settings
-  if (appearance) {
-    // Handle transparent background
-    if (appearance.bgTransparent) {
-      bubble.style.backgroundColor = 'transparent';
-      bubble.style.border = 'none';
-      bubble.style.boxShadow = 'none';
-      bubble.style.backdropFilter = 'none';
-      // No text shadow for clear readability on transparent background
-    } else {
-      // Use user's configured colors (same for error and success)
-      bubble.style.backgroundColor = appearance.bgColor;
-    }
-    bubble.style.color = appearance.textColor;
-    
-    // Add red border for errors instead of changing background
-    if (isError) {
-      bubble.style.border = '2px solid #dc2626';
-      bubble.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
-    }
-    
-    // Position classes: bl, br, tl, tr
-    bubble.classList.add(`position-${appearance.position}`);
+  // Apply user preferences
+  if (bubblePreferences.bgTransparent) {
+    bubble.style.backgroundColor = 'transparent';
+    bubble.style.border = 'none';
+    bubble.style.boxShadow = 'none';
+    bubble.style.backdropFilter = 'none';
   } else {
-    // Default appearance
-    bubble.classList.add('position-bl');
-    if (isError) {
-      // Use default colors with red border for errors
-      bubble.style.border = '2px solid #dc2626';
-      bubble.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
-    }
+    bubble.style.backgroundColor = bubblePreferences.bgColor;
   }
+  bubble.style.color = bubblePreferences.textColor;
+  
+  // Add red border for errors
+  if (isError) {
+    bubble.style.border = '2px solid #dc2626';
+    bubble.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
+  }
+  
+  // Position from preferences
+  bubble.classList.add(`position-${bubblePreferences.position}`);
 
   // Add to shadow DOM
   shadow.appendChild(bubble);
@@ -161,10 +173,10 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
     bubble.classList.add('show');
   });
 
-  // Auto-hide after duration
+  // Auto-hide after user-configured duration
   hideTimeout = window.setTimeout(() => {
     hideBubble();
-  }, BUBBLE_DISPLAY_DURATION);
+  }, bubblePreferences.duration);
 
   // Allow manual close on click
   bubble.addEventListener('click', hideBubble);

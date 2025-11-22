@@ -1,87 +1,115 @@
 import { useState, useEffect } from 'react';
-import type { Settings, Session, ApiTier } from '../shared/types';
-import { getSettings, saveSettings, getSessions } from '../shared/storage';
-import { DEFAULT_SETTINGS } from '../shared/types';
-import { FaCog, FaRobot, FaComments, FaPalette, FaBook } from 'react-icons/fa';
-import ProviderSettings from './components/ProviderSettings';
-import CustomPromptSettings from './components/CustomPromptSettings';
-import BubbleSettings from './components/BubbleSettings';
-import SessionManager from './components/SessionManager';
-import { UsageMonitor } from './components/UsageMonitor';
-import HistoryViewer from './components/HistoryViewer';
-import ErrorLogViewer from './components/ErrorLogViewer';
-import DebugViewer from './components/DebugViewer';
+import { FaCog, FaRobot, FaBook, FaUser, FaCoins, FaCreditCard, FaPalette, FaFileAlt } from 'react-icons/fa';
+import { isAuthenticated, getAuthData, type AuthData } from '../shared/storage';
+import { getProfile } from '../shared/api';
+import LoginPage from './components/LoginPage';
+import ProfilePage from './components/ProfilePage';
+import BalancePage from './components/BalancePage';
+import SessionsPage from './components/SessionsPage';
+import HistoryPage from './components/HistoryPage';
+import BubblePreferences from './components/BubblePreferences';
+import KnowledgeManager from './components/KnowledgeManager';
 import './styles.css';
 
-type TabType = 'settings' | 'history' | 'errors' | 'debug';
+type TabType = 'profile' | 'balance' | 'sessions' | 'history' | 'knowledge' | 'preferences';
 
 function App() {
-  const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [saveMessage, setSaveMessage] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('settings');
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authData, setAuthData] = useState<AuthData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
 
   useEffect(() => {
-    loadData();
+    checkAuth();
   }, []);
 
-  const loadData = async () => {
-    console.log('🔄 App.tsx: Loading data...');
-    try {
-      const loadedSettings = await getSettings();
-      const loadedSessions = await getSessions();
+  async function checkAuth() {
+    const isAuth = await isAuthenticated();
+    setAuthenticated(isAuth);
+    
+    if (isAuth) {
+      const data = await getAuthData();
+      setAuthData(data);
       
-      console.log('✅ App.tsx: Data loaded:', {
-        settings: loadedSettings,
-        sessionsCount: loadedSessions.length
-      });
-      
-      setSettingsState(loadedSettings);
-      setSessions(loadedSessions);
-    } catch (error) {
-      console.error('❌ App.tsx: Error loading data:', error);
+      // Refresh user data from server
+      const profileResult = await getProfile();
+      if (profileResult.success) {
+        // Update auth data with fresh user info
+        if (data) {
+          data.user = profileResult.data;
+          setAuthData({ ...data });
+        }
+      }
     }
-  };
+    
+    setLoading(false);
+  }
 
-  const handleSettingsChange = async (updates: Partial<Settings>) => {
-    const newSettings = { ...settings, ...updates };
-    setSettingsState(newSettings);
-    await saveSettingsToStorage(newSettings);
-  };
+  function handleLoginSuccess() {
+    checkAuth();
+  }
 
-  const saveSettingsToStorage = async (newSettings: Settings) => {
-    console.log('💾 App.tsx: Saving settings...', newSettings);
-    try {
-      await saveSettings(newSettings);
-      console.log('✅ App.tsx: Settings saved successfully');
-      setSaveMessage('✓ Saved');
-      setTimeout(() => setSaveMessage(''), 2000);
-    } catch (error) {
-      console.error('❌ App.tsx: Error saving settings:', error);
-      setSaveMessage('✗ Failed to save');
-      setTimeout(() => setSaveMessage(''), 3000);
-    }
-  };
+  function handleLogout() {
+    setAuthenticated(false);
+    setAuthData(null);
+    setActiveTab('profile');
+  }
 
-  const handleSessionsUpdate = (updatedSessions: Session[]) => {
-    setSessions(updatedSessions);
-  };
+  if (loading) {
+    return (
+      <div className="app-container">
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          height: '100vh' 
+        }}>
+          <div style={{ textAlign: 'center' }}>
+            <FaCog className="fa-spin" style={{ fontSize: '48px', color: '#4CAF50' }} />
+            <p style={{ marginTop: '20px', color: '#666' }}>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authenticated) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
 
   return (
     <div className="app-container">
       <div className="app-header">
         <div className="header-content">
           <div className="logo-section">
-            <FaCog className="logo-icon" />
-            <h1>GenovaAI Settings</h1>
+            <FaRobot className="logo-icon" />
+            <div>
+              <h1>GenovaAI Extension</h1>
+              <div className="subtitle">
+                Welcome, {authData?.user.name || authData?.user.email}
+              </div>
+            </div>
           </div>
-          <div className="subtitle">Smart Quiz Assistant Configuration</div>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+            <div style={{ 
+              display: 'flex', 
+              gap: '10px',
+              padding: '8px 15px',
+              background: '#f5f5f5',
+              borderRadius: '8px',
+              fontSize: '14px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <FaCoins style={{ color: '#4CAF50' }} />
+                <span><strong>{authData?.user.credits || 0}</strong> credits</span>
+              </div>
+              <div style={{ borderLeft: '1px solid #ddd', paddingLeft: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <FaCreditCard style={{ color: '#2196F3' }} />
+                <span>Rp <strong>{authData?.user.balance ? parseFloat(authData.user.balance).toLocaleString('id-ID') : '0'}</strong></span>
+              </div>
+            </div>
+          </div>
         </div>
-        {saveMessage && (
-          <div className={`save-badge ${saveMessage.includes('✓') ? 'success' : 'error'}`}>
-            {saveMessage}
-          </div>
-        )}
       </div>
 
       {/* Tab Navigation */}
@@ -93,33 +121,67 @@ function App() {
         background: 'white',
       }}>
         <button
-          onClick={() => setActiveTab('settings')}
+          onClick={() => setActiveTab('profile')}
           style={{
             padding: '15px 25px',
             border: 'none',
-            borderBottom: activeTab === 'settings' ? '3px solid #4CAF50' : '3px solid transparent',
+            borderBottom: activeTab === 'profile' ? '3px solid #4CAF50' : '3px solid transparent',
             background: 'transparent',
             cursor: 'pointer',
             fontSize: '15px',
-            fontWeight: activeTab === 'settings' ? '600' : '500',
-            color: activeTab === 'settings' ? '#4CAF50' : '#666',
+            fontWeight: activeTab === 'profile' ? '600' : '500',
+            color: activeTab === 'profile' ? '#4CAF50' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaUser style={{ marginRight: '8px' }} />
+          Profile
+        </button>
+        <button
+          onClick={() => setActiveTab('balance')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'balance' ? '3px solid #2196F3' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'balance' ? '600' : '500',
+            color: activeTab === 'balance' ? '#2196F3' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaCreditCard style={{ marginRight: '8px' }} />
+          Balance
+        </button>
+        <button
+          onClick={() => setActiveTab('sessions')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'sessions' ? '3px solid #9C27B0' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'sessions' ? '600' : '500',
+            color: activeTab === 'sessions' ? '#9C27B0' : '#666',
             transition: 'all 0.2s',
           }}
         >
           <FaCog style={{ marginRight: '8px' }} />
-          Settings
+          Sessions
         </button>
         <button
           onClick={() => setActiveTab('history')}
           style={{
             padding: '15px 25px',
             border: 'none',
-            borderBottom: activeTab === 'history' ? '3px solid #2196F3' : '3px solid transparent',
+            borderBottom: activeTab === 'history' ? '3px solid #FF9800' : '3px solid transparent',
             background: 'transparent',
             cursor: 'pointer',
             fontSize: '15px',
             fontWeight: activeTab === 'history' ? '600' : '500',
-            color: activeTab === 'history' ? '#2196F3' : '#666',
+            color: activeTab === 'history' ? '#FF9800' : '#666',
             transition: 'all 0.2s',
           }}
         >
@@ -127,180 +189,53 @@ function App() {
           History
         </button>
         <button
-          onClick={() => setActiveTab('errors')}
+          onClick={() => setActiveTab('knowledge')}
           style={{
             padding: '15px 25px',
             border: 'none',
-            borderBottom: activeTab === 'errors' ? '3px solid #F44336' : '3px solid transparent',
+            borderBottom: activeTab === 'knowledge' ? '3px solid #00BCD4' : '3px solid transparent',
             background: 'transparent',
             cursor: 'pointer',
             fontSize: '15px',
-            fontWeight: activeTab === 'errors' ? '600' : '500',
-            color: activeTab === 'errors' ? '#F44336' : '#666',
+            fontWeight: activeTab === 'knowledge' ? '600' : '500',
+            color: activeTab === 'knowledge' ? '#00BCD4' : '#666',
+            transition: 'all 0.2s',
+          }}
+        >
+          <FaFileAlt style={{ marginRight: '8px' }} />
+          Knowledge
+        </button>
+        <button
+          onClick={() => setActiveTab('preferences')}
+          style={{
+            padding: '15px 25px',
+            border: 'none',
+            borderBottom: activeTab === 'preferences' ? '3px solid #E91E63' : '3px solid transparent',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: '15px',
+            fontWeight: activeTab === 'preferences' ? '600' : '500',
+            color: activeTab === 'preferences' ? '#E91E63' : '#666',
             transition: 'all 0.2s',
           }}
         >
           <FaPalette style={{ marginRight: '8px' }} />
-          Error Logs
-        </button>
-        <button
-          onClick={() => setActiveTab('debug')}
-          style={{
-            padding: '15px 25px',
-            border: 'none',
-            borderBottom: activeTab === 'debug' ? '3px solid #FF9800' : '3px solid transparent',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: activeTab === 'debug' ? '600' : '500',
-            color: activeTab === 'debug' ? '#FF9800' : '#666',
-            transition: 'all 0.2s',
-          }}
-        >
-          <FaCog style={{ marginRight: '8px' }} />
-          Debug
+          Preferences
         </button>
       </div>
 
       <div className="app-content">
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="settings-grid">
-            <section className="settings-card">
-              <div className="card-header">
-                <FaRobot className="card-icon" />
-                <h2>LLM Provider</h2>
-              </div>
-              <ProviderSettings
-                provider={settings.provider}
-                apiKey={settings.apiKey}
-                selectedModel={settings.selectedModel}
-                onChange={(provider: any, apiKey: string, selectedModel: any) => 
-                  handleSettingsChange({ provider, apiKey, selectedModel })
-                }
-              />
-            </section>
-
-            <section className="settings-card">
-              <div className="card-header">
-                <FaComments className="card-icon" />
-                <h2>Prompt Configuration</h2>
-              </div>
-              <CustomPromptSettings
-                useCustomPrompt={settings.useCustomPrompt}
-                userPrompt={settings.userPrompt}
-                answerMode={settings.answerMode}
-                onChange={(useCustomPrompt: boolean, userPrompt: string, answerMode: any) => 
-                  handleSettingsChange({ useCustomPrompt, userPrompt, answerMode })
-                }
-              />
-            </section>
-
-            <section className="settings-card">
-              <div className="card-header">
-                <FaPalette className="card-icon" />
-                <h2>Bubble Appearance</h2>
-              </div>
-              <BubbleSettings
-                bubbleAppearance={settings.bubbleAppearance}
-                onChange={(bubbleAppearance: any) => handleSettingsChange({ bubbleAppearance })}
-              />
-            </section>
-
-            <section className="settings-card full-width">
-              <div className="card-header">
-                <FaBook className="card-icon" />
-                <h2>Knowledge Sessions</h2>
-              </div>
-              <SessionManager
-                sessions={sessions}
-                activeSessionId={settings.activeSessionId}
-                onSessionsUpdate={handleSessionsUpdate}
-                onActiveSessionChange={(sessionId: string | null) => 
-                  handleSettingsChange({ activeSessionId: sessionId })
-                }
-              />
-            </section>
-
-            {/* Usage Monitor - Only show for Gemini provider */}
-            {settings.provider === 'gemini' && (
-              <section className="settings-card full-width">
-                <UsageMonitor
-                  settings={settings}
-                  onTierChange={(tier: ApiTier) => handleSettingsChange({ apiTier: tier })}
-                  onEnforceLimitChange={(enforce: boolean) => 
-                    handleSettingsChange({ enforceRateLimit: enforce })
-                  }
-                />
-              </section>
-            )}
-            
-            {/* Debug Mode Toggle */}
-            <section className="settings-card full-width">
-              <div className="card-header">
-                <FaCog className="card-icon" />
-                <h2>Debug Mode</h2>
-              </div>
-              <div style={{ padding: '15px' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '10px',
-                  cursor: 'pointer',
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={settings.debugMode}
-                    onChange={(e) => handleSettingsChange({ debugMode: e.target.checked })}
-                    style={{ 
-                      width: '20px', 
-                      height: '20px',
-                      cursor: 'pointer',
-                    }}
-                  />
-                  <span style={{ fontSize: '15px' }}>
-                    Enable debug logging (records all API requests/responses)
-                  </span>
-                </label>
-                <p style={{ 
-                  marginTop: '10px', 
-                  fontSize: '13px', 
-                  color: '#666',
-                  marginLeft: '30px',
-                }}>
-                  When enabled, all LLM API requests and responses will be logged for debugging.
-                  View logs in the Debug tab. Last 50 requests are kept.
-                </p>
-              </div>
-            </section>
-          </div>
-        )}
-
-        {/* History Tab */}
-        {activeTab === 'history' && (
-          <div className="settings-card full-width">
-            <HistoryViewer />
-          </div>
-        )}
-
-        {/* Error Logs Tab */}
-        {activeTab === 'errors' && (
-          <div className="settings-card full-width">
-            <ErrorLogViewer />
-          </div>
-        )}
-        
-        {/* Debug Tab */}
-        {activeTab === 'debug' && (
-          <div className="settings-card full-width">
-            <DebugViewer />
-          </div>
-        )}
+        {activeTab === 'profile' && <ProfilePage authData={authData} onLogout={handleLogout} />}
+        {activeTab === 'balance' && <BalancePage authData={authData} />}
+        {activeTab === 'sessions' && <SessionsPage />}
+        {activeTab === 'history' && <HistoryPage />}
+        {activeTab === 'knowledge' && <KnowledgeManager />}
+        {activeTab === 'preferences' && <BubblePreferences />}
       </div>
 
       <footer className="app-footer">
-        <p>GenovaAI v1.4.0 – Smart Quiz Assistant with Rate Limiting</p>
-        <p className="footer-hint">All settings are saved automatically</p>
+        <p>GenovaAI v2.0 – AI-Powered Quiz Assistant</p>
+        <p className="footer-hint">Connected to backend server</p>
       </footer>
     </div>
   );

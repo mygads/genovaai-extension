@@ -1,472 +1,487 @@
-// API utilities for LLM providers
-import type { LLMProvider, AnswerMode, GeminiModel, OpenRouterModel, KnowledgeFile } from './types';
+// API client for GenovaAI backend integration
+import { getAuthData, saveAuthData, clearAuthData, type AuthData } from './storage';
+
+const API_BASE = 'http://localhost:8090';
 
 /**
- * Improved system prompt with clear structure using Markdown
- * Based on Gemini prompt engineering best practices
+ * Refresh access token using refresh token
  */
-export const DEFAULT_SYSTEM_PROMPT = `# Role
-You are GenovaAI, a precise quiz assistant specialized in helping students answer questions accurately and concisely.
-
-# Core Competencies
-- Extract key information from provided knowledge base
-- Match questions with relevant context
-- Deliver answers in the exact format requested
-
-# Answer Mode Guidelines
-
-## Mode: option
-**Task**: Select ONLY the correct letter (A/B/C/D/E)
-**Format**: Single letter, no explanation, no punctuation
-**Example**:
-Question: "What is the capital of France? A) London B) Paris C) Berlin"
-Answer: "B"
-
-## Mode: short  
-**Task**: Provide concise answer in 1-2 sentences maximum
-**Format**: Direct statement, factual, no elaboration
-**Example**:
-Question: "What is photosynthesis?"
-Answer: "Photosynthesis is the process where plants convert sunlight, CO2, and water into glucose and oxygen."
-
-## Mode: full
-**Task**: Provide comprehensive answer with details
-**Format**: Complete explanation with context, examples if helpful
-**Example**:
-Question: "What is photosynthesis?"
-Answer: "Photosynthesis is a vital biological process where plants, algae, and some bacteria convert light energy (usually from the sun) into chemical energy stored in glucose. The process occurs in chloroplasts and involves two main stages: light-dependent reactions and the Calvin cycle. The overall equation is: 6CO2 + 6H2O + light → C6H12O6 + 6O2."
-
-# Constraints
-- NEVER explain your reasoning in 'option' mode
-- NEVER add extra words in 'option' mode (no "The answer is", no periods)
-- When uncertain in 'option' mode, choose the most likely answer
-- Always base answers on provided knowledge when available
-- If knowledge base doesn't contain answer, state "Information not found in knowledge base" (except in 'option' mode - guess best option)
-
-# Output Format
-Deliver ONLY the answer content. No preamble, no meta-commentary.`;
-
-export interface LLMRequestParams {
-  provider: LLMProvider;
-  apiKey: string;
-  model: GeminiModel | OpenRouterModel;
-  systemInstruction?: string;
-  knowledgeText?: string;
-  knowledgeFiles?: KnowledgeFile[];
-  question: string;
-  debugMode?: boolean;
-}
-
-/**
- * Call Gemini API with multimodal support (native PDF understanding)
- */
-async function callGeminiAPI(
-  apiKey: string,
-  model: GeminiModel,
-  systemInstruction: string | undefined,
-  knowledgeText: string | undefined,
-  knowledgeFiles: KnowledgeFile[] | undefined,
-  question: string,
-  debugMode: boolean = false
-): Promise<{ answer: string; debugInfo?: any }> {
-  const startTime = Date.now();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-  
-  // Build contents array with multimodal support
-  const parts: any[] = [];
-  
-  // Add knowledge text if provided
-  if (knowledgeText && knowledgeText.trim()) {
-    parts.push({ text: `Knowledge Base:\n${knowledgeText}\n\n` });
-  }
-  
-  // Add PDF files using File API URI (native visual understanding)
-  if (knowledgeFiles && knowledgeFiles.length > 0) {
-    for (const file of knowledgeFiles) {
-      if (file.type === 'pdf' && file.fileUri && file.mimeType) {
-        // Use File API URI for native PDF understanding
-        parts.push({
-          fileData: {
-            fileUri: file.fileUri,
-            mimeType: file.mimeType,
-          }
-        });
-      } else if (file.type === 'txt' || (file.type === 'pdf' && !file.fileUri)) {
-        // Fallback to text content for TXT files or PDFs without URI
-        if (file.content && file.content.trim()) {
-          parts.push({ text: `File: ${file.name}\n${file.content}\n\n` });
-        }
-      }
-    }
-  }
-  
-  // Add the question
-  parts.push({ text: `Question:\n${question}` });
-  
-  const requestBody: any = {
-    contents: [{
-      parts: parts
-    }],
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 800, // Balanced: enough for complete answers, not too high
-    }
-  };
-  
-  // Add system instruction if provided
-  if (systemInstruction && systemInstruction.trim()) {
-    requestBody.systemInstruction = {
-      parts: [{ text: systemInstruction }]
-    };
-  }
-  
-  console.log('🚀 Gemini API Request:', {
-    url,
-    model,
-    hasSystemInstruction: !!systemInstruction,
-    partsCount: parts.length,
-    requestBody: JSON.stringify(requestBody, null, 2)
-  });
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  const duration = Date.now() - startTime;
-  console.log('📡 Gemini API Response Status:', response.status, response.statusText);
-
-  if (!response.ok) {
-    let errorData: any = {};
-    const responseText = await response.text();
-    console.error('❌ Gemini API Error Response:', responseText);
-    
-    try {
-      errorData = JSON.parse(responseText);
-    } catch {
-      errorData = { message: responseText };
-    }
-    
-    // ALWAYS log debug info on error (not just when debugMode=true)
-    try {
-      const { addDebugLog } = await import('./storage');
-      await addDebugLog(
-        'gemini',
-        model,
-        {
-          systemInstruction: systemInstruction?.substring(0, 500),
-          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
-          fileCount: knowledgeFiles?.length || 0,
-          question: question.substring(0, 500),
-        },
-        {
-          error: `${response.status}: ${JSON.stringify(errorData)}`,
-          rawResponse: responseText.substring(0, 1000),
-        },
-        duration
-      );
-      console.log('✅ Debug log saved for error response');
-    } catch (logError) {
-      console.error('❌ Failed to log debug info:', logError);
-    }
-    
-    throw new Error(`Gemini API error: ${response.status} - ${JSON.stringify(errorData)}`);
-  }
-
-  let data: any;
-  const responseText = await response.text();
-  console.log('📦 Gemini API Raw Response:', responseText.substring(0, 500) + '...');
-  
+export async function refreshAccessToken(): Promise<boolean> {
   try {
-    data = JSON.parse(responseText);
-    console.log('✅ Gemini API Parsed Response:', JSON.stringify(data, null, 2));
-  } catch (parseError) {
-    console.error('❌ Failed to parse Gemini response:', parseError);
-    throw new Error(`Invalid JSON response from Gemini API: ${responseText.substring(0, 200)}`);
-  }
-  
-  // Validate response structure with detailed error messages
-  if (!data.candidates || data.candidates.length === 0) {
-    console.error('❌ Missing candidates in response:', data);
-    
-    // Check for prompt feedback (blocked content)
-    if (data.promptFeedback) {
-      const blockReason = data.promptFeedback.blockReason || 'UNKNOWN';
-      const safetyRatings = data.promptFeedback.safetyRatings || [];
-      throw new Error(
-        `Gemini API blocked request: ${blockReason}. ` +
-        `Safety: ${JSON.stringify(safetyRatings)}`
-      );
-    }
-    
-    throw new Error(
-      `Gemini API returned no candidates. ` +
-      `Response: ${JSON.stringify(data).substring(0, 200)}`
-    );
-  }
-  
-  const candidate = data.candidates[0];
-  
-  // Check finish reason
-  if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-    console.warn('⚠️ Unusual finish reason:', candidate.finishReason);
-    
-    // ALWAYS log debug info when finish reason is not STOP
-    try {
-      const { addDebugLog } = await import('./storage');
-      await addDebugLog(
-        'gemini',
-        model,
-        {
-          systemInstruction: systemInstruction?.substring(0, 500),
-          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
-          fileCount: knowledgeFiles?.length || 0,
-          question: question.substring(0, 500),
-        },
-        {
-          error: `Finish reason: ${candidate.finishReason}`,
-          rawResponse: JSON.stringify(data).substring(0, 2000),
-          finishReason: candidate.finishReason,
-        },
-        duration
-      );
-      console.log('✅ Debug log saved for non-STOP finish reason');
-    } catch (logError) {
-      console.error('❌ Failed to log debug info:', logError);
-    }
-    
-    // Handle specific finish reasons
-    if (candidate.finishReason === 'SAFETY') {
-      throw new Error(
-        'Gemini API blocked response due to safety filters. ' +
-        'Try rephrasing your question or adjusting content filters.'
-      );
-    } else if (candidate.finishReason === 'MAX_TOKENS') {
-      throw new Error(
-        'Gemini API stopped due to max tokens. ' +
-        'Response was too long. Try a shorter question.'
-      );
-    } else if (candidate.finishReason === 'RECITATION') {
-      throw new Error(
-        'Gemini API detected potential copyrighted content. ' +
-        'Try rephrasing your question.'
-      );
-    } else {
-      throw new Error(
-        `Gemini API stopped with reason: ${candidate.finishReason}. ` +
-        `This may indicate content policy violation or technical issue.`
-      );
-    }
-  }
-  
-  // Validate content structure
-  if (!candidate.content) {
-    console.error('❌ Missing content in candidate:', candidate);
-    throw new Error(
-      `Gemini API returned empty content. ` +
-      `Candidate: ${JSON.stringify(candidate).substring(0, 200)}`
-    );
-  }
-  
-  if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
-    console.error('❌ Missing or empty parts:', candidate.content);
-    throw new Error(
-      `Gemini API returned no content parts. ` +
-      `This may indicate content filtering or an API issue. ` +
-      `Content: ${JSON.stringify(candidate.content)}`
-    );
-  }
-  
-  const firstPart = candidate.content.parts[0];
-  if (!firstPart || !firstPart.text) {
-    console.error('❌ Missing text in first part:', candidate.content.parts);
-    throw new Error(
-      `Gemini API returned no text in response. ` +
-      `Parts: ${JSON.stringify(candidate.content.parts)}`
-    );
-  }
+    const authData = await getAuthData();
+    if (!authData?.refreshToken) return false;
 
-  const answer = firstPart.text.trim();
-  
-  if (!answer) {
-    throw new Error('Gemini API returned empty text response.');
-  }
-  
-  console.log('✨ Gemini API Answer:', answer);
-  
-  // Extract token info if available
-  const usageMetadata = data.usageMetadata;
-  const tokenCount = usageMetadata ? {
-    promptTokens: usageMetadata.promptTokenCount,
-    candidatesTokens: usageMetadata.candidatesTokenCount,
-    totalTokens: usageMetadata.totalTokenCount,
-  } : undefined;
-  
-  // Log debug info if enabled
-  if (debugMode) {
-    try {
-      const { addDebugLog } = await import('./storage');
-      await addDebugLog(
-        'gemini',
-        model,
-        {
-          systemInstruction: systemInstruction?.substring(0, 500),
-          knowledgeText: knowledgeText ? `${knowledgeText.substring(0, 300)}... (${knowledgeText.length} chars)` : undefined,
-          fileCount: knowledgeFiles?.length || 0,
-          question: question.substring(0, 500),
-        },
-        {
-          answer: answer.substring(0, 500),
-          rawResponse: JSON.stringify(data).substring(0, 2000),
-          finishReason: candidate.finishReason || 'STOP',
-          tokenCount,
-        },
-        duration
-      );
-    } catch (logError) {
-      console.error('Failed to log debug info:', logError);
-    }
-  }
-  
-  return { answer, debugInfo: debugMode ? { tokenCount, finishReason: candidate.finishReason, duration } : undefined };
-}
-
-/**
- * Call OpenRouter API (text-only, no native PDF support)
- */
-async function callOpenRouterAPI(
-  apiKey: string,
-  model: OpenRouterModel,
-  systemInstruction: string | undefined,
-  knowledgeText: string | undefined,
-  knowledgeFiles: KnowledgeFile[] | undefined,
-  question: string
-): Promise<string> {
-  const url = 'https://openrouter.ai/api/v1/chat/completions';
-  
-  // Build combined text content (OpenRouter doesn't support File API)
-  let userMessage = '';
-  
-  if (knowledgeText && knowledgeText.trim()) {
-    userMessage += `Knowledge Base:\n${knowledgeText}\n\n`;
-  }
-  
-  // For OpenRouter, include file content as text (fallback)
-  if (knowledgeFiles && knowledgeFiles.length > 0) {
-    for (const file of knowledgeFiles) {
-      if (file.content && file.content.trim()) {
-        userMessage += `File: ${file.name}\n${file.content}\n\n`;
-      }
-    }
-  }
-  
-  userMessage += `Question:\n${question}`;
-  
-  const messages: any[] = [];
-  
-  if (systemInstruction && systemInstruction.trim()) {
-    messages.push({
-      role: 'system',
-      content: systemInstruction
+    const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refreshToken: authData.refreshToken,
+      }),
     });
-  }
-  
-  messages.push({
-    role: 'user',
-    content: userMessage
-  });
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': chrome.runtime.getURL(''),
-      'X-Title': 'GenovaAI Extension',
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: 0.3,
-      max_tokens: 800, // Balanced token limit
-    }),
-  });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`OpenRouter API error: ${response.status} - ${JSON.stringify(errorData)}`);
-  }
+    const data = await response.json();
+    if (!data.success) return false;
 
-  const data = await response.json();
-  
-  if (!data.choices || !data.choices[0]?.message?.content) {
-    throw new Error('Invalid response from OpenRouter API');
-  }
+    // Update auth data with new access token
+    const newAuthData: AuthData = {
+      ...authData,
+      accessToken: data.data.accessToken,
+      expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+    };
 
-  return data.choices[0].message.content.trim();
-}
-
-/**
- * Call LLM API based on provider
- */
-export async function callLLM(params: LLMRequestParams): Promise<string> {
-  const { provider, apiKey, model, systemInstruction, knowledgeText, knowledgeFiles, question, debugMode } = params;
-
-  if (!apiKey || apiKey.trim() === '') {
-    throw new Error('API key belum diatur di Settings.');
-  }
-
-  try {
-    if (provider === 'gemini') {
-      const result = await callGeminiAPI(
-        apiKey,
-        model as GeminiModel,
-        systemInstruction,
-        knowledgeText,
-        knowledgeFiles,
-        question,
-        debugMode || false
-      );
-      return result.answer;
-    } else if (provider === 'openrouter') {
-      return await callOpenRouterAPI(
-        apiKey,
-        model as OpenRouterModel,
-        systemInstruction,
-        knowledgeText,
-        knowledgeFiles,
-        question
-      );
-    } else {
-      throw new Error(`Unknown provider: ${provider}`);
-    }
+    await saveAuthData(newAuthData);
+    return true;
   } catch (error) {
-    console.error('LLM API Error:', error);
-    throw error;
+    console.error('Error refreshing token:', error);
+    return false;
   }
 }
 
 /**
- * Build system instruction based on custom prompt setting
- * 
- * CRITICAL LOGIC:
- * - If useCustomPrompt = true: Use userPrompt as system instruction (ignore default & mode)
- * - If useCustomPrompt = false: Use defaultPrompt + mode as system instruction
+ * Get valid access token (auto-refresh if needed)
  */
-export function buildSystemInstruction(
-  useCustomPrompt: boolean,
-  userPrompt: string,
-  answerMode: AnswerMode
-): string {
-  if (useCustomPrompt) {
-    // Custom prompt mode: use user's prompt as system instruction
-    return userPrompt.trim();
-  } else {
-    // Default prompt mode: use default system prompt + mode
-    return `${DEFAULT_SYSTEM_PROMPT}\n\nMode: ${answerMode}`;
+export async function getAccessToken(): Promise<string | null> {
+  const authData = await getAuthData();
+  if (!authData) return null;
+
+  // Check if token is expired or about to expire (1 min buffer)
+  if (Date.now() >= authData.expiresAt - 60000) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) return null;
+    
+    const newAuthData = await getAuthData();
+    return newAuthData?.accessToken || null;
+  }
+
+  return authData.accessToken;
+}
+
+/**
+ * Make authenticated API request
+ */
+async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = await getAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  // If 401, try to refresh token once
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      const newToken = await getAccessToken();
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${newToken}`,
+        },
+      });
+    }
+  }
+
+  return response;
+}
+
+// ==================== AUTH APIs ====================
+
+export async function registerUser(data: {
+  email: string;
+  password: string;
+  name: string;
+  phone?: string;
+}): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      // Save auth data
+      const authData: AuthData = {
+        accessToken: result.data.accessToken,
+        refreshToken: result.data.refreshToken,
+        user: result.data.user,
+        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+      };
+      await saveAuthData(authData);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Register error:', error);
+    return { success: false, message: 'Network error' };
   }
 }
 
+export async function loginUser(data: {
+  email: string;
+  password: string;
+}): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    
+    if (result.success) {
+      // Save auth data
+      const authData: AuthData = {
+        accessToken: result.data.accessToken,
+        refreshToken: result.data.refreshToken,
+        user: result.data.user,
+        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+      };
+      await saveAuthData(authData);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Login error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function logoutUser(): Promise<void> {
+  try {
+    await fetchWithAuth(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+  } finally {
+    await clearAuthData();
+  }
+}
+
+// ==================== PROFILE & BALANCE APIs ====================
+
+export async function getProfile(): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/profile`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get profile error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function getBalance(): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/balance`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get balance error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function getTransactions(limit = 50, offset = 0): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/transactions?limit=${limit}&offset=${offset}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get transactions error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+// ==================== API KEYS APIs ====================
+
+export async function getApiKeys(): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/apikeys`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get API keys error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function addApiKey(apiKey: string, keyName?: string): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/apikeys`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ apiKey, keyName }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Add API key error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function deleteApiKey(keyId: string): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/apikeys/${keyId}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Delete API key error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+// ==================== SESSION APIs ====================
+
+export async function getSessions(limit = 20, offset = 0): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions?limit=${limit}&offset=${offset}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get sessions error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function getSession(sessionId: string): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions/${sessionId}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get session error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function createSession(config: {
+  sessionName: string;
+  systemPrompt?: string;
+  knowledgeContext?: string;
+  knowledgeFileIds?: string[];
+  answerMode?: string;
+  requestMode?: string;
+  provider?: string;
+  model?: string;
+}): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Create session error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function updateSession(sessionId: string, updates: {
+  sessionName?: string;
+  systemPrompt?: string;
+  knowledgeContext?: string;
+  knowledgeFileIds?: string[];
+  answerMode?: string;
+  requestMode?: string;
+  provider?: string;
+  model?: string;
+  isActive?: boolean;
+}): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Update session error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+export async function deleteSession(sessionId: string): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Delete session error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+// ==================== LLM GATEWAY API ====================
+
+export async function askQuestion(sessionId: string, question: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/gateway/ask`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionId,
+        question,
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Ask question error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+// ==================== HISTORY APIs ====================
+
+export async function getHistory(sessionId?: string, limit = 50, offset = 0): Promise<{ success: boolean; data?: any; message?: string }> {
+  try {
+    let url = `${API_BASE}/api/customer/genovaai/history?limit=${limit}&offset=${offset}`;
+    if (sessionId) {
+      url += `&sessionId=${sessionId}`;
+    }
+    const response = await fetchWithAuth(url);
+    return await response.json();
+  } catch (error) {
+    console.error('Get history error:', error);
+    return { success: false, message: 'Network error' };
+  }
+}
+
+// ==================== KNOWLEDGE MANAGEMENT APIs ====================
+
+export async function uploadFile(file: File, sessionId?: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (sessionId) {
+      formData.append('sessionId', sessionId);
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const response = await fetch(`${API_BASE}/api/customer/genovaai/knowledge/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    return await response.json();
+  } catch (error) {
+    console.error('Upload file error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function getKnowledgeFiles(sessionId?: string, limit = 50, offset = 0): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    let url = `${API_BASE}/api/customer/genovaai/knowledge?limit=${limit}&offset=${offset}`;
+    if (sessionId) {
+      url += `&sessionId=${sessionId}`;
+    }
+    const response = await fetchWithAuth(url);
+    return await response.json();
+  } catch (error) {
+    console.error('Get knowledge files error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function getKnowledgeFile(fileId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/knowledge/${fileId}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Get knowledge file error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function deleteKnowledgeFile(fileId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/knowledge/${fileId}`, {
+      method: 'DELETE',
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Delete knowledge file error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function linkFileToSession(fileId: string, sessionId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/knowledge/${fileId}/link`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Link file to session error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function unlinkFileFromSession(fileId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/knowledge/${fileId}/link`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId: null }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Unlink file from session error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+export async function downloadKnowledgeFile(fileId: string): Promise<Blob | null> {
+  try {
+    const token = await getAccessToken();
+    if (!token) return null;
+
+    const response = await fetch(`${API_BASE}/api/customer/genovaai/knowledge/${fileId}/download`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) return null;
+    return await response.blob();
+  } catch (error) {
+    console.error('Download file error:', error);
+    return null;
+  }
+}
