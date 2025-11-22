@@ -86,14 +86,29 @@ export async function saveSettings(settings: Settings): Promise<void> {
  */
 export async function getSessions(): Promise<Session[]> {
   try {
+    // Get session IDs
     const result = await chrome.storage.sync.get(STORAGE_KEYS.SESSIONS);
-    const sessions = (result[STORAGE_KEYS.SESSIONS] as Session[]) || [];
+    const sessionIds = (result[STORAGE_KEYS.SESSIONS] as string[]) || [];
     
-    // Initialize history array for sessions that don't have it
-    return sessions.map(s => ({
-      ...s,
-      history: s.history || [],
-    }));
+    if (sessionIds.length === 0) return [];
+    
+    // Load each session separately
+    const sessionKeys = sessionIds.map(id => `session_${id}`);
+    const sessionsData = await chrome.storage.sync.get(sessionKeys);
+    
+    const sessions: Session[] = [];
+    for (const id of sessionIds) {
+      const session = sessionsData[`session_${id}`] as Session | undefined;
+      if (session) {
+        // Initialize history array for sessions that don't have it
+        sessions.push({
+          ...session,
+          history: session.history || [],
+        });
+      }
+    }
+    
+    return sessions;
   } catch (error) {
     console.error('Error getting sessions:', error);
     return [];
@@ -105,7 +120,28 @@ export async function getSessions(): Promise<Session[]> {
  */
 export async function saveSessions(sessions: Session[]): Promise<void> {
   try {
-    await chrome.storage.sync.set({ [STORAGE_KEYS.SESSIONS]: sessions });
+    // Store each session separately to avoid quota issues
+    const sessionIds = sessions.map(s => s.id);
+    const storageData: Record<string, any> = {
+      [STORAGE_KEYS.SESSIONS]: sessionIds, // Only store IDs in main key
+    };
+    
+    // Store each session separately
+    for (const session of sessions) {
+      storageData[`session_${session.id}`] = session;
+    }
+    
+    await chrome.storage.sync.set(storageData);
+    
+    // Clean up old session keys that are no longer in the list
+    const allKeys = await chrome.storage.sync.get(null);
+    const keysToRemove = Object.keys(allKeys)
+      .filter(key => key.startsWith('session_'))
+      .filter(key => !sessionIds.includes(key.replace('session_', '')));
+    
+    if (keysToRemove.length > 0) {
+      await chrome.storage.sync.remove(keysToRemove);
+    }
   } catch (error) {
     console.error('Error saving sessions:', error);
     throw error;

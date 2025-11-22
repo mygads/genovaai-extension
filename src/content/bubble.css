@@ -69,9 +69,3 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-
-/* Error state */
-.genovaai-bubble.error {
-  background-color: #dc2626 !important;
-  color: #ffffff !important;
-}

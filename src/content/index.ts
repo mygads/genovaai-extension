@@ -42,8 +42,8 @@ chrome.runtime.onMessage.addListener((message: GenovaMessage) => {
   if (message.type === 'GENOVA_RESULT' && message.answer) {
     showBubble(message.answer, message.bubbleAppearance, false);
   } else if (message.type === 'GENOVA_ERROR' && message.error) {
-    // Show error in same bubble location (not separate red bubble)
-    showBubble(`❌ ${message.error}`, message.bubbleAppearance, true);
+    // Show only "Error" on screen (full error is saved in history)
+    showBubble('Error', message.bubbleAppearance, true);
   } else if (message.type === 'GENOVA_LOADING') {
     // Show loading indicator
     showLoadingBubble(message.bubbleAppearance);
@@ -142,8 +142,9 @@ function showBubble(text: string, appearance?: BubbleAppearance, isError: boolea
     // Default appearance
     bubble.classList.add('position-bl');
     if (isError) {
-      bubble.style.backgroundColor = '#dc2626';
-      bubble.style.color = '#ffffff'; // White text for red error background
+      // Use default colors with red border for errors
+      bubble.style.border = '2px solid #dc2626';
+      bubble.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.3)';
     }
   }
 
