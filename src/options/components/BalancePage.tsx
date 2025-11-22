@@ -2,6 +2,7 @@ import { FaCoins, FaCreditCard, FaPlus, FaHistory } from 'react-icons/fa';
 import { type AuthData } from '../../shared/storage';
 import { getTransactions } from '../../shared/api';
 import { useState, useEffect } from 'react';
+import VoucherRedemption from './VoucherRedemption';
 
 interface BalancePageProps {
   authData: AuthData | null;
@@ -148,12 +149,21 @@ export default function BalancePage({ authData }: BalancePageProps) {
         </div>
       </div>
 
+      {/* Voucher Redemption */}
+      <div style={{ marginTop: '30px' }}>
+        <VoucherRedemption onRedeemSuccess={() => {
+          // Reload transactions after successful redemption
+          loadTransactions();
+        }} />
+      </div>
+
       {/* Transactions */}
       <div style={{
         background: 'white',
         borderRadius: '12px',
         padding: '30px',
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+        marginTop: '30px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
           <FaHistory style={{ fontSize: '20px', color: '#666' }} />

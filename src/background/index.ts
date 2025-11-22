@@ -16,6 +16,9 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set up token refresh alarm (every 10 minutes)
   chrome.alarms.create('refreshToken', { periodInMinutes: 10 });
   
+  // Set up session check alarm (every 5 minutes)
+  chrome.alarms.create('checkSession', { periodInMinutes: 5 });
+  
   console.log('GenovaAI Extension (Backend) installed');
 });
 
@@ -31,6 +34,23 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       } else {
         console.error('❌ Token refresh failed');
       }
+    }
+  }
+  
+  if (alarm.name === 'checkSession') {
+    const isAuth = await isAuthenticated();
+    if (!isAuth) {
+      console.warn('⚠️ Session expired. User needs to login again.');
+      // Show notification to user
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'public/logo.png',
+        title: 'GenovaAI Session Expired',
+        message: 'Your session has expired. Please login again in extension settings.',
+        priority: 2,
+      });
+    } else {
+      console.log('✅ Session is still valid');
     }
   }
 });
@@ -68,7 +88,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Check authentication
     const isAuth = await isAuthenticated();
     if (!isAuth) {
-      sendErrorToTab(tab.id, 'Please login first');
+      sendErrorToTab(tab.id, 'Your session has expired. Please login again in Settings.');
+      // Show notification
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'public/logo.png',
+        title: 'Login Required',
+        message: 'Please login in GenovaAI extension settings to continue.',
+        priority: 2,
+      });
       return;
     }
 
