@@ -1,5 +1,5 @@
 // API client for GenovaAI backend integration
-import { getAuthData, saveAuthData, type AuthData } from './storage';
+import { getAuthData, saveAuthData, logout, type AuthData } from './storage';
 
 const API_BASE = 'http://localhost:8090';
 
@@ -31,7 +31,6 @@ export async function refreshAccessToken(): Promise<boolean> {
       // If refresh token is invalid, logout completely
       if (response.status === 401) {
         console.log('🚪 Session invalid, logging out...');
-        const { logout } = await import('./storage');
         await logout();
         // Send notification to all tabs
         chrome.tabs.query({}, (tabs) => {
@@ -99,10 +98,15 @@ export async function getAccessToken(): Promise<string | null> {
  * Make authenticated API request
  */
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
+  console.log('🔵 fetchWithAuth called:', { url, method: options.method || 'GET' });
+  
   const token = await getAccessToken();
   if (!token) {
+    console.error('❌ No token available');
     throw new Error('Not authenticated');
   }
+  
+  console.log('🔑 Token available, making request...');
 
   const response = await fetch(url, {
     ...options,
@@ -111,6 +115,8 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
       'Authorization': `Bearer ${token}`,
     },
   });
+  
+  console.log('📥 Response:', response.status, response.statusText);
 
   // If 401, try to refresh token once
   if (response.status === 401) {
@@ -127,7 +133,6 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
     } else {
       // Refresh failed, auto logout
       console.log('🚪 Cannot refresh token, logging out...');
-      const { logout } = await import('./storage');
       await logout();
       throw new Error('Session expired. Please login again.');
     }
@@ -219,7 +224,6 @@ export async function logoutUser(): Promise<void> {
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
-    const { logout } = await import('./storage');
     await logout();
   }
 }
@@ -385,22 +389,36 @@ export async function deleteSession(sessionId: string): Promise<{ success: boole
 
 // ==================== LLM GATEWAY API ====================
 
-export async function askQuestion(sessionId: string, question: string): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function askQuestion(sessionId: string | null, question: string): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
+    console.log('🔵 askQuestion called:', {
+      endpoint: `${API_BASE}/api/gateway/ask`,
+      sessionId: sessionId || 'AUTO (backend will select active session)',
+      questionLength: question.length,
+    });
+    
+    const body: any = { question };
+    if (sessionId) {
+      body.sessionId = sessionId;
+    }
+    
     const response = await fetchWithAuth(`${API_BASE}/api/gateway/ask`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        sessionId,
-        question,
-      }),
+      body: JSON.stringify(body),
     });
-    return await response.json();
+    
+    console.log('✅ Response received:', response.status, response.statusText);
+    const data = await response.json();
+    console.log('📦 Response data:', data);
+    
+    return data;
   } catch (error) {
-    console.error('Ask question error:', error);
-    return { success: false, error: 'Network error' };
+    console.error('❌ Ask question error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Network error';
+    return { success: false, error: errorMessage };
   }
 }
 

@@ -100,9 +100,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   try {
+    console.log('🔍 Checking authentication...');
+    
     // Check authentication
     const isAuth = await isAuthenticated();
+    console.log('🔐 isAuthenticated result:', isAuth);
+    
     if (!isAuth) {
+      console.error('❌ Not authenticated!');
       sendErrorToTab(tab.id, 'Your session has expired. Please login again in Settings.');
       // Show notification
       chrome.notifications.create({
@@ -115,15 +120,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
 
-    // Get current session
-    const sessionId = await getCurrentSessionId();
-    if (!sessionId) {
-      sendErrorToTab(tab.id, 'No active session. Please set an active session in Settings.');
-      return;
-    }
-
     console.log('🚀 Processing question with GenovaAI (Backend)...');
-    console.log('📝 Session ID:', sessionId);
     console.log('📝 Question:', selectedText.substring(0, 100) + '...');
 
     // Show loading indicator
@@ -136,10 +133,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       console.warn('⚠️ Could not send loading indicator:', loadingError);
     }
 
-    // Call backend API
-    const result = await askQuestion(sessionId, selectedText);
+    // Call backend API (backend will auto-select active session)
+    console.log('📡 Calling askQuestion API...');
+    const result = await askQuestion(null, selectedText);
+    console.log('📦 API result:', { success: result.success, error: result.error, hasData: !!result.data });
 
     if (!result.success) {
+      console.error('❌ API call failed:', result.error);
       throw new Error(result.error || 'Failed to get answer');
     }
 
@@ -147,6 +147,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     console.log('✅ Answer received from backend');
     console.log('📊 History ID:', result.data?.historyId);
+    console.log('📝 Answer preview:', answer.substring(0, 100) + '...');
 
     // Send result to content script
     const message: GenovaMessage = {
