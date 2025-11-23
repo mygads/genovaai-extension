@@ -106,25 +106,27 @@ function App() {
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-            <div style={{ 
-              display: 'flex', 
-              gap: '10px',
-              padding: '8px 15px',
-              background: '#f5f5f5',
-              borderRadius: '8px',
-              fontSize: '14px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <FaCoins style={{ color: '#4CAF50' }} />
-                <span><strong>{authData?.user.credits || 0}</strong> credits</span>
-              </div>
-              <div style={{ borderLeft: '1px solid #ddd', paddingLeft: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <FaCreditCard style={{ color: '#2196F3' }} />
-                <span>Rp <strong>{authData?.user.balance ? parseFloat(authData.user.balance).toLocaleString('id-ID') : '0'}</strong></span>
+          {authData?.user && (
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              <div style={{ 
+                display: 'flex', 
+                gap: '10px',
+                padding: '8px 15px',
+                background: '#f5f5f5',
+                borderRadius: '8px',
+                fontSize: '14px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <FaCoins style={{ color: '#4CAF50' }} />
+                  <span><strong>{authData.user.credits || 0}</strong> credits</span>
+                </div>
+                <div style={{ borderLeft: '1px solid #ddd', paddingLeft: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <FaCreditCard style={{ color: '#2196F3' }} />
+                  <span>Rp <strong>{authData.user.balance ? parseFloat(authData.user.balance.toString()).toLocaleString('id-ID') : '0'}</strong></span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

@@ -153,62 +153,72 @@ export default function KnowledgeManager({ sessionId }: Props) {
   };
 
   const getFileIcon = (fileType: string) => {
+    const iconStyle = { fontSize: '24px' };
     switch (fileType.toUpperCase()) {
       case 'PDF':
-        return <FaFilePdf className="text-red-500" />;
+        return <FaFilePdf style={{ ...iconStyle, color: '#f44336' }} />;
       case 'DOCX':
-        return <FaFileWord className="text-blue-500" />;
+        return <FaFileWord style={{ ...iconStyle, color: '#2196F3' }} />;
       case 'TXT':
-        return <FaFileAlt className="text-gray-500" />;
+        return <FaFileAlt style={{ ...iconStyle, color: '#666' }} />;
       default:
-        return <FaFile className="text-gray-400" />;
+        return <FaFile style={{ ...iconStyle, color: '#999' }} />;
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div style={{ padding: '20px', maxWidth: '900px', margin: '0 auto' }}>
       {/* Upload Area */}
       <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          dragOver
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
-        }`}
+        style={{
+          border: `2px dashed ${dragOver ? '#2196F3' : '#ddd'}`,
+          borderRadius: '12px',
+          padding: '40px',
+          textAlign: 'center',
+          background: dragOver ? '#e3f2fd' : 'white',
+          transition: 'all 0.2s',
+          marginBottom: '20px',
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <FaUpload className="mx-auto text-4xl text-gray-400 mb-4" />
-        <p className="text-gray-600 mb-2">
+        <FaUpload style={{ fontSize: '48px', color: '#999', marginBottom: '16px' }} />
+        <p style={{ fontSize: '16px', color: '#666', marginBottom: '8px', fontWeight: '500' }}>
           Drag & drop a file here, or click to browse
         </p>
-        <p className="text-sm text-gray-500 mb-4">
+        <p style={{ fontSize: '13px', color: '#999', marginBottom: '20px' }}>
           Supported: PDF, TXT, DOCX (Max 10MB)
         </p>
         <input
           type="file"
           id="file-input"
-          className="hidden"
+          style={{ display: 'none' }}
           accept=".pdf,.txt,.docx"
           onChange={(e) => handleFileSelect(e.target.files)}
           disabled={uploading}
         />
         <label
           htmlFor="file-input"
-          className={`inline-block px-6 py-2 rounded-lg cursor-pointer transition-colors ${
-            uploading
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-500 text-white hover:bg-blue-600'
-          }`}
+          style={{
+            display: 'inline-block',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            cursor: uploading ? 'not-allowed' : 'pointer',
+            background: uploading ? '#e0e0e0' : '#2196F3',
+            color: 'white',
+            fontWeight: '500',
+            fontSize: '14px',
+          }}
         >
           {uploading ? (
             <>
-              <FaSpinner className="inline animate-spin mr-2" />
+              <FaSpinner style={{ display: 'inline', marginRight: '8px', animation: 'spin 1s linear infinite' }} />
               Uploading...
             </>
           ) : (
             <>
-              <FaUpload className="inline mr-2" />
+              <FaUpload style={{ display: 'inline', marginRight: '8px' }} />
               Choose File
             </>
           )}
@@ -217,15 +227,20 @@ export default function KnowledgeManager({ sessionId }: Props) {
 
       {/* Upload Progress */}
       {uploading && uploadProgress > 0 && (
-        <div className="bg-gray-100 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">Uploading...</span>
-            <span className="text-sm font-medium">{uploadProgress}%</span>
+        <div style={{ background: '#f5f5f5', borderRadius: '8px', padding: '16px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '14px', color: '#666' }}>Uploading...</span>
+            <span style={{ fontSize: '14px', fontWeight: '500' }}>{uploadProgress}%</span>
           </div>
-          <div className="w-full bg-gray-300 rounded-full h-2">
+          <div style={{ width: '100%', background: '#ddd', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${uploadProgress}%` }}
+              style={{
+                background: '#2196F3',
+                height: '8px',
+                borderRadius: '4px',
+                transition: 'width 0.3s',
+                width: `${uploadProgress}%`,
+              }}
             />
           </div>
         </div>
@@ -233,56 +248,78 @@ export default function KnowledgeManager({ sessionId }: Props) {
 
       {/* Success Message */}
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-          <FaCheck className="text-green-500 mr-3" />
-          <span className="text-green-700">{success}</span>
+        <div style={{
+          background: '#e8f5e9',
+          border: '1px solid #c8e6c9',
+          borderRadius: '8px',
+          padding: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: '20px',
+        }}>
+          <FaCheck style={{ color: '#4CAF50', marginRight: '12px', flexShrink: 0 }} />
+          <span style={{ color: '#2e7d32' }}>{success}</span>
         </div>
       )}
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
-          <FaTimes className="text-red-500 mr-3" />
-          <span className="text-red-700">{error}</span>
+        <div style={{
+          background: '#ffebee',
+          border: '1px solid #ffcdd2',
+          borderRadius: '8px',
+          padding: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          marginBottom: '20px',
+        }}>
+          <FaTimes style={{ color: '#f44336', marginRight: '12px', flexShrink: 0 }} />
+          <span style={{ color: '#c62828' }}>{error}</span>
         </div>
       )}
 
       {/* File List */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-3 border-b border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800">
+      <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+        <div style={{ padding: '20px', borderBottom: '1px solid #e0e0e0' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#333', marginBottom: '4px' }}>
             Uploaded Files {sessionId && '(This Session)'}
           </h3>
-          <p className="text-sm text-gray-500">
+          <p style={{ fontSize: '13px', color: '#666' }}>
             {files.length} file{files.length !== 1 && 's'}
           </p>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center">
-            <FaSpinner className="inline text-3xl text-gray-400 animate-spin" />
-            <p className="text-gray-500 mt-2">Loading files...</p>
+          <div style={{ padding: '40px', textAlign: 'center' }}>
+            <FaSpinner style={{ fontSize: '32px', color: '#999', animation: 'spin 1s linear infinite' }} />
+            <p style={{ color: '#666', marginTop: '12px' }}>Loading files...</p>
           </div>
         ) : files.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
+          <div style={{ padding: '40px', textAlign: 'center', color: '#666' }}>
             No files uploaded yet
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div>
             {files.map((file) => (
               <div
                 key={file.id}
-                className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between"
+                style={{
+                  padding: '16px 20px',
+                  borderBottom: '1px solid #f0f0f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
               >
-                <div className="flex items-center flex-1 min-w-0">
-                  <div className="text-2xl mr-3 flex-shrink-0">
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                  <div style={{ marginRight: '12px', flexShrink: 0 }}>
                     {getFileIcon(file.fileType)}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 truncate">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: '500', color: '#333', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {file.fileName}
                     </p>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '13px', color: '#666' }}>
                       <span>{file.fileType.toUpperCase()}</span>
                       <span>{formatFileSize(file.fileSize)}</span>
                       <span>{formatDate(file.uploadedAt)}</span>
@@ -291,8 +328,19 @@ export default function KnowledgeManager({ sessionId }: Props) {
                 </div>
                 <button
                   onClick={() => handleDelete(file.id, file.fileName)}
-                  className="ml-4 p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  style={{
+                    marginLeft: '16px',
+                    padding: '8px',
+                    color: '#f44336',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
                   title="Delete file"
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#ffebee'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   <FaTrash />
                 </button>

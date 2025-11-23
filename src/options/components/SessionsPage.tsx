@@ -261,7 +261,10 @@ export default function SessionsPage() {
                   value={provider}
                   onChange={(e) => {
                     setProvider(e.target.value);
-                    setModel(modelsByProvider[e.target.value][0]);
+                    const models = modelsByProvider[e.target.value];
+                    if (models && models.length > 0) {
+                      setModel(models[0]);
+                    }
                   }}
                   style={{
                     width: '100%',
@@ -292,7 +295,7 @@ export default function SessionsPage() {
                     fontSize: '14px',
                   }}
                 >
-                  {modelsByProvider[provider].map((m) => (
+                  {(modelsByProvider[provider] || []).map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
