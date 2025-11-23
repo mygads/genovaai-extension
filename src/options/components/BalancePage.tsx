@@ -21,13 +21,23 @@ export default function BalancePage({ authData }: BalancePageProps) {
 
   async function loadTransactions() {
     setLoading(true);
-    const result = await getTransactions(limit, offset);
-    setLoading(false);
-
-    if (result.success) {
-      const data = result.data || [];
-      setTransactions(data);
-      setHasMore(data.length === limit);
+    try {
+      const result = await getTransactions(limit, offset);
+      console.log('[BalancePage] Transactions result:', result);
+      if (result.success) {
+        const txData = Array.isArray(result.data) ? result.data : (result.data?.transactions || []);
+        setTransactions(txData);
+        setHasMore(txData.length === limit);
+      } else {
+        setTransactions([]);
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('[BalancePage] Load transactions error:', error);
+      setTransactions([]);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
     }
   }
 

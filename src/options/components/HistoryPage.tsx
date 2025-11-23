@@ -18,21 +18,40 @@ export default function HistoryPage() {
   }, []);
 
   async function loadSessions() {
-    const result = await getSessions();
-    if (result.success) {
-      setSessions(result.data || []);
+    try {
+      const result = await getSessions();
+      console.log('[HistoryPage] Sessions result:', result);
+      if (result.success) {
+        const sessions = Array.isArray(result.data) ? result.data : (result.data?.sessions || []);
+        setSessions(sessions);
+      } else {
+        setSessions([]);
+      }
+    } catch (error) {
+      console.error('[HistoryPage] Load sessions error:', error);
+      setSessions([]);
     }
   }
 
   async function loadHistory() {
     setLoading(true);
-    const result = await getHistory(selectedSessionId || undefined, limit, offset);
-    setLoading(false);
-
-    if (result.success) {
-      const data = result.data || [];
-      setHistory(data);
-      setHasMore(data.length === limit);
+    try {
+      const result = await getHistory(selectedSessionId || undefined, limit, offset);
+      console.log('[HistoryPage] History result:', result);
+      if (result.success) {
+        const historyData = Array.isArray(result.data) ? result.data : (result.data?.history || []);
+        setHistory(historyData);
+        setHasMore(historyData.length === limit);
+      } else {
+        setHistory([]);
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error('[HistoryPage] Load history error:', error);
+      setHistory([]);
+      setHasMore(false);
+    } finally {
+      setLoading(false);
     }
   }
 

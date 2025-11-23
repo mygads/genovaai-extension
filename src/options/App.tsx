@@ -24,25 +24,41 @@ function App() {
   }, []);
 
   async function checkAuth() {
-    const isAuth = await isAuthenticated();
-    setAuthenticated(isAuth);
-    
-    if (isAuth) {
-      const data = await getAuthData();
-      setAuthData(data);
+    try {
+      console.log('[Options] Checking authentication...');
+      const isAuth = await isAuthenticated();
+      console.log('[Options] Is authenticated:', isAuth);
+      setAuthenticated(isAuth);
       
-      // Refresh user data from server
-      const profileResult = await getProfile();
-      if (profileResult.success) {
-        // Update auth data with fresh user info
-        if (data) {
-          data.user = profileResult.data;
-          setAuthData({ ...data });
+      if (isAuth) {
+        const data = await getAuthData();
+        console.log('[Options] Auth data:', data);
+        setAuthData(data);
+        
+        // Refresh user data from server
+        try {
+          const profileResult = await getProfile();
+          console.log('[Options] Profile result:', profileResult);
+          if (profileResult.success && profileResult.data) {
+            // Update auth data with fresh user info
+            if (data) {
+              data.user = profileResult.data;
+              setAuthData({ ...data });
+              console.log('[Options] Updated auth data with profile');
+            }
+          }
+        } catch (profileError) {
+          console.error('[Options] Profile fetch error:', profileError);
+          // Continue anyway with cached data
         }
       }
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('[Options] checkAuth error:', error);
+      setLoading(false);
+      setAuthenticated(false);
     }
-    
-    setLoading(false);
   }
 
   function handleLoginSuccess() {

@@ -20,9 +20,20 @@ export default function ProfilePage({ authData, onLogout }: ProfilePageProps) {
   }, []);
 
   async function loadApiKeys() {
-    const result = await getApiKeys();
-    if (result.success) {
-      setApiKeys(result.data || []);
+    try {
+      const result = await getApiKeys();
+      console.log('[ProfilePage] API Keys result:', result);
+      if (result.success) {
+        // Check if data is array or nested object
+        const keys = Array.isArray(result.data) ? result.data : (result.data?.apiKeys || []);
+        setApiKeys(keys);
+      } else {
+        console.warn('[ProfilePage] Invalid API keys data:', result);
+        setApiKeys([]);
+      }
+    } catch (error) {
+      console.error('[ProfilePage] Failed to load API keys:', error);
+      setApiKeys([]);
     }
   }
 
@@ -57,7 +68,13 @@ export default function ProfilePage({ authData, onLogout }: ProfilePageProps) {
     onLogout();
   }
 
-  if (!authData) return null;
+  if (!authData || !authData.user) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        <p style={{ color: '#666' }}>Loading profile data...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>

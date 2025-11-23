@@ -25,11 +25,21 @@ export default function SessionsPage() {
 
   async function loadSessions() {
     setLoading(true);
-    const result = await getSessions();
-    setLoading(false);
-
-    if (result.success) {
-      setSessions(result.data || []);
+    try {
+      const result = await getSessions();
+      console.log('[SessionsPage] Sessions result:', result);
+      if (result.success) {
+        // Extract sessions array from nested data
+        const sessions = Array.isArray(result.data) ? result.data : (result.data?.sessions || []);
+        setSessions(sessions);
+      } else {
+        setSessions([]);
+      }
+    } catch (error) {
+      console.error('[SessionsPage] Load sessions error:', error);
+      setSessions([]);
+    } finally {
+      setLoading(false);
     }
   }
 

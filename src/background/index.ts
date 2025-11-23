@@ -7,11 +7,16 @@ const CONTEXT_MENU_ID = 'genovaai-analyze';
 
 // Initialize context menu when extension is installed or updated
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: CONTEXT_MENU_ID,
-    title: 'GenovaAI',
-    contexts: ['selection'],
-  });
+  try {
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_ID,
+      title: 'GenovaAI',
+      contexts: ['selection'],
+    });
+    console.log('✅ Context menu created');
+  } catch (error) {
+    console.error('❌ Failed to create context menu:', error);
+  }
 
   // Set up token refresh alarm (every 10 minutes)
   chrome.alarms.create('refreshToken', { periodInMinutes: 10 });
