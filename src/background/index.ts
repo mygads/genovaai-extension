@@ -18,11 +18,11 @@ chrome.runtime.onInstalled.addListener(() => {
     console.error('❌ Failed to create context menu:', error);
   }
 
-  // Set up token refresh alarm (every 10 minutes)
-  chrome.alarms.create('refreshToken', { periodInMinutes: 10 });
+  // Set up token refresh alarm (every 5 minutes to keep tokens fresh)
+  chrome.alarms.create('refreshToken', { periodInMinutes: 5 });
   
-  // Set up session check alarm (every 5 minutes)
-  chrome.alarms.create('checkSession', { periodInMinutes: 5 });
+  // Set up session check alarm (every 2 minutes for faster detection)
+  chrome.alarms.create('checkSession', { periodInMinutes: 2 });
   
   console.log('GenovaAI Extension (Backend) installed');
 });
@@ -32,20 +32,30 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'refreshToken') {
     const isAuth = await isAuthenticated();
     if (isAuth) {
-      console.log('🔄 Auto-refreshing access token...');
+      console.log('🔄 Auto-refreshing access token (scheduled check)...');
       const success = await refreshAccessToken();
       if (success) {
         console.log('✅ Token refreshed successfully');
       } else {
-        console.error('❌ Token refresh failed');
+        console.error('❌ Token refresh failed - session may be invalid');
+        // Show notification to user
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'public/logo.png',
+          title: 'GenovaAI Session Issue',
+          message: 'Could not refresh your session. Please login again in extension settings.',
+          priority: 2,
+        });
       }
+    } else {
+      console.log('⏭️ Skipping token refresh - not authenticated');
     }
   }
   
   if (alarm.name === 'checkSession') {
     const isAuth = await isAuthenticated();
     if (!isAuth) {
-      console.warn('⚠️ Session expired. User needs to login again.');
+      console.warn('⚠️ Session expired or invalid. User needs to login again.');
       // Show notification to user
       chrome.notifications.create({
         type: 'basic',

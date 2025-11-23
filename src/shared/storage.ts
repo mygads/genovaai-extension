@@ -67,13 +67,25 @@ export async function clearAuthData(): Promise<void> {
  */
 export async function isAuthenticated(): Promise<boolean> {
   const authData = await getAuthData();
-  if (!authData) return false;
-  
-  // Check if token is expired
-  if (Date.now() >= authData.expiresAt) {
+  if (!authData) {
+    console.log('❌ Not authenticated: No auth data');
     return false;
   }
   
+  // Check if token is expired
+  const now = Date.now();
+  const timeUntilExpiry = authData.expiresAt - now;
+  
+  if (timeUntilExpiry <= 0) {
+    console.log('❌ Not authenticated: Token expired', {
+      expiredAt: new Date(authData.expiresAt).toISOString(),
+      now: new Date(now).toISOString(),
+      expiredAgo: Math.abs(Math.floor(timeUntilExpiry / 1000)) + 's',
+    });
+    return false;
+  }
+  
+  console.log('✅ Authenticated: Token valid for', Math.floor(timeUntilExpiry / 1000), 'seconds');
   return true;
 }
 

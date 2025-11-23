@@ -9,8 +9,12 @@ const API_BASE = 'http://localhost:8090';
 export async function refreshAccessToken(): Promise<boolean> {
   try {
     const authData = await getAuthData();
-    if (!authData?.refreshToken) return false;
+    if (!authData?.refreshToken) {
+      console.error('❌ No refresh token available');
+      return false;
+    }
 
+    console.log('🔄 Refreshing access token...');
     const response = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: 'POST',
       headers: {
@@ -22,19 +26,28 @@ export async function refreshAccessToken(): Promise<boolean> {
     });
 
     const data = await response.json();
-    if (!data.success) return false;
+    if (!data.success) {
+      console.error('❌ Token refresh failed:', data.error);
+      // If refresh token is invalid, clear auth data
+      if (response.status === 401) {
+        await clearAuthData();
+      }
+      return false;
+    }
 
-    // Update auth data with new access token
+    // Update auth data with new access token and correct expiry
+    const expiresInMs = (data.data.expiresIn || 604800) * 1000; // Convert seconds to ms (default 7 days)
     const newAuthData: AuthData = {
       ...authData,
       accessToken: data.data.accessToken,
-      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+      expiresAt: Date.now() + expiresInMs, // Token expires in 7 days
     };
 
     await saveAuthData(newAuthData);
+    console.log('✅ Access token refreshed, expires in', data.data.expiresIn, 'seconds');
     return true;
   } catch (error) {
-    console.error('Error refreshing token:', error);
+    console.error('❌ Error refreshing token:', error);
     return false;
   }
 }
@@ -44,17 +57,28 @@ export async function refreshAccessToken(): Promise<boolean> {
  */
 export async function getAccessToken(): Promise<string | null> {
   const authData = await getAuthData();
-  if (!authData) return null;
+  if (!authData) {
+    console.warn('⚠️ No auth data available');
+    return null;
+  }
 
-  // Check if token is expired or about to expire (1 min buffer)
-  if (Date.now() >= authData.expiresAt - 60000) {
+  // Check if token is expired or about to expire (2 min buffer for safety)
+  const bufferMs = 2 * 60 * 1000; // 2 minutes
+  const timeUntilExpiry = authData.expiresAt - Date.now();
+  
+  if (timeUntilExpiry <= bufferMs) {
+    console.log('🔄 Token expired or expiring soon, refreshing...');
     const refreshed = await refreshAccessToken();
-    if (!refreshed) return null;
+    if (!refreshed) {
+      console.error('❌ Failed to refresh token');
+      return null;
+    }
     
     const newAuthData = await getAuthData();
     return newAuthData?.accessToken || null;
   }
 
+  console.log(`✅ Token valid for ${Math.floor(timeUntilExpiry / 1000)}s more`);
   return authData.accessToken;
 }
 
@@ -113,19 +137,20 @@ export async function registerUser(data: {
     const result = await response.json();
     
     if (result.success) {
-      // Save auth data
+      // Save auth data with correct expiry (7 days from server)
+      const expiresInMs = (result.data.expiresIn || 604800) * 1000; // Convert seconds to ms (default 7 days)
       const authData: AuthData = {
         accessToken: result.data.accessToken,
         refreshToken: result.data.refreshToken,
         user: result.data.user,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+        expiresAt: Date.now() + expiresInMs,
       };
       await saveAuthData(authData);
     }
 
     return result;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Register error:', error);
     return { success: false, message: 'Network error' };
   }
 }
@@ -146,19 +171,20 @@ export async function loginUser(data: {
     const result = await response.json();
     
     if (result.success) {
-      // Save auth data
+      // Save auth data with correct expiry (7 days from server)
+      const expiresInMs = (result.data.expiresIn || 604800) * 1000; // Convert seconds to ms (default 7 days)
       const authData: AuthData = {
         accessToken: result.data.accessToken,
         refreshToken: result.data.refreshToken,
         user: result.data.user,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
+        expiresAt: Date.now() + expiresInMs,
       };
       await saveAuthData(authData);
     }
 
     return result;
   } catch (error) {
-    console.error('Register error:', error);
+    console.error('Login error:', error);
     return { success: false, message: 'Network error' };
   }
 }
