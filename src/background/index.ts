@@ -39,13 +39,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       } else {
         console.error('❌ Token refresh failed - session may be invalid');
         // Show notification to user
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: 'public/logo.png',
-          title: 'GenovaAI Session Issue',
-          message: 'Could not refresh your session. Please login again in extension settings.',
-          priority: 2,
-        });
+        try {
+          if (chrome.notifications) {
+            chrome.notifications.create({
+              type: 'basic',
+              iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+              title: 'GenovaAI Session Issue',
+              message: 'Could not refresh your session. Please login again.',
+              priority: 2,
+            });
+          }
+        } catch (notifError) {
+          console.warn('Could not show notification:', notifError);
+        }
       }
     } else {
       console.log('⏭️ Skipping token refresh - not authenticated');
@@ -55,15 +61,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'checkSession') {
     const isAuth = await isAuthenticated();
     if (!isAuth) {
-      console.warn('⚠️ Session expired or invalid. User needs to login again.');
-      // Show notification to user
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'public/logo.png',
-        title: 'GenovaAI Session Expired',
-        message: 'Your session has expired. Please login again in extension settings.',
-        priority: 2,
-      });
+      console.log('⏭️ Not authenticated - skipping session check');
+      // Don't show notification, user already logged out or never logged in
     } else {
       console.log('✅ Session is still valid');
     }
@@ -110,13 +109,19 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       console.error('❌ Not authenticated!');
       sendErrorToTab(tab.id, 'Your session has expired. Please login again in Settings.');
       // Show notification
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'public/logo.png',
-        title: 'Login Required',
-        message: 'Please login in GenovaAI extension settings to continue.',
-        priority: 2,
-      });
+      try {
+        if (chrome.notifications) {
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+            title: 'Login Required',
+            message: 'Please login in GenovaAI extension settings to continue.',
+            priority: 2,
+          });
+        }
+      } catch (notifError) {
+        console.warn('Could not show notification:', notifError);
+      }
       return;
     }
 
