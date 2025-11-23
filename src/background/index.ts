@@ -18,11 +18,12 @@ chrome.runtime.onInstalled.addListener(() => {
     console.error('❌ Failed to create context menu:', error);
   }
 
-  // Set up token refresh alarm (every 5 minutes to keep tokens fresh)
-  chrome.alarms.create('refreshToken', { periodInMinutes: 5 });
+  // Set up token refresh alarm (every 23 hours to keep tokens fresh before expiry)
+  // Token expires in 7 days, refresh daily to keep it active
+  chrome.alarms.create('refreshToken', { periodInMinutes: 1380 }); // 23 hours
   
-  // Set up session check alarm (every 2 minutes for faster detection)
-  chrome.alarms.create('checkSession', { periodInMinutes: 2 });
+  // Set up session check alarm (every 30 minutes for reasonable monitoring)
+  chrome.alarms.create('checkSession', { periodInMinutes: 30 });
   
   console.log('GenovaAI Extension (Backend) installed');
 });
