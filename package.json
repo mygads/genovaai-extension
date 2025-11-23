@@ -1,9 +1,9 @@
 {
   "name": "genovaai-extension",
   "type": "module",
-  "version": "1.4.1",
+  "version": "2.1.1",
   "private": true,
-  "displayName": "GenovaAI - Smart Quiz Assistant",
+  "displayName": "GenovaAI - Simple AI Assistant",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

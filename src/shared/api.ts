@@ -28,7 +28,7 @@ export async function refreshAccessToken(): Promise<boolean> {
     const newAuthData: AuthData = {
       ...authData,
       accessToken: data.data.accessToken,
-      expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+      expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
     };
 
     await saveAuthData(newAuthData);
@@ -118,14 +118,14 @@ export async function registerUser(data: {
         accessToken: result.data.accessToken,
         refreshToken: result.data.refreshToken,
         user: result.data.user,
-        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
       };
       await saveAuthData(authData);
     }
 
     return result;
   } catch (error) {
-    console.error('Register error:', error);
+    console.error('Login error:', error);
     return { success: false, message: 'Network error' };
   }
 }
@@ -151,14 +151,14 @@ export async function loginUser(data: {
         accessToken: result.data.accessToken,
         refreshToken: result.data.refreshToken,
         user: result.data.user,
-        expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+        expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
       };
       await saveAuthData(authData);
     }
 
     return result;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Register error:', error);
     return { success: false, message: 'Network error' };
   }
 }
