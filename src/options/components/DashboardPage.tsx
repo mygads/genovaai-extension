@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { FaUser, FaWallet, FaCog, FaExternalLinkAlt, FaCheckCircle } from 'react-icons/fa';
-import { getProfile, getSessions } from '../../shared/api';
+import { FaUser, FaWallet, FaCog, FaExternalLinkAlt, FaCheckCircle, FaSignOutAlt } from 'react-icons/fa';
+import { getProfile, getSessions, logoutUser } from '../../shared/api';
 
 export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null);
@@ -54,6 +54,19 @@ export default function DashboardPage() {
     chrome.tabs.create({ url: 'http://localhost:8090/dashboard' });
   }
 
+  async function handleLogout() {
+    if (confirm('Are you sure you want to logout?')) {
+      try {
+        await logoutUser();
+        // Reload to show login page
+        window.location.reload();
+      } catch (error) {
+        console.error('Logout error:', error);
+        alert('Failed to logout. Please try again.');
+      }
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ 
@@ -85,25 +98,47 @@ export default function DashboardPage() {
             Welcome to GenovaAI Extension
           </p>
         </div>
-        <button
-          onClick={openServerUrl}
-          style={{
-            padding: '10px 20px',
-            background: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '500',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <FaExternalLinkAlt />
-          Manage Account
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={openServerUrl}
+            style={{
+              padding: '10px 20px',
+              background: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <FaExternalLinkAlt />
+            Manage Account
+          </button>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '10px 20px',
+              background: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+            title="Logout"
+          >
+            <FaSignOutAlt />
+            Logout
+          </button>
+        </div>
       </div>
 
       {/* Cards Grid */}

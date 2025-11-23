@@ -63,6 +63,32 @@ export async function clearAuthData(): Promise<void> {
 }
 
 /**
+ * Full logout: Clear auth and session data, but keep preferences
+ * Notifies all tabs about logout
+ */
+export async function logout(): Promise<void> {
+  try {
+    console.log('🚪 Logging out...');
+    
+    // Clear auth data and session
+    await chrome.storage.local.remove([
+      STORAGE_KEYS.AUTH_DATA,
+      STORAGE_KEYS.CURRENT_SESSION_ID,
+    ]);
+    
+    // Notify all tabs about logout
+    chrome.runtime.sendMessage({ type: 'LOGOUT' }).catch(() => {
+      // Ignore errors if no listeners
+    });
+    
+    console.log('✅ Logged out successfully');
+  } catch (error) {
+    console.error('❌ Error during logout:', error);
+    throw error;
+  }
+}
+
+/**
  * Check if user is authenticated
  */
 export async function isAuthenticated(): Promise<boolean> {

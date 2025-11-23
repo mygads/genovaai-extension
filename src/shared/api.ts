@@ -1,5 +1,5 @@
 // API client for GenovaAI backend integration
-import { getAuthData, saveAuthData, clearAuthData, type AuthData } from './storage';
+import { getAuthData, saveAuthData, type AuthData } from './storage';
 
 const API_BASE = 'http://localhost:8090';
 
@@ -28,9 +28,22 @@ export async function refreshAccessToken(): Promise<boolean> {
     const data = await response.json();
     if (!data.success) {
       console.error('❌ Token refresh failed:', data.error);
-      // If refresh token is invalid, clear auth data
+      // If refresh token is invalid, logout completely
       if (response.status === 401) {
-        await clearAuthData();
+        console.log('🚪 Session invalid, logging out...');
+        const { logout } = await import('./storage');
+        await logout();
+        // Send notification to all tabs
+        chrome.tabs.query({}, (tabs) => {
+          tabs.forEach((tab) => {
+            if (tab.id) {
+              chrome.tabs.sendMessage(tab.id, {
+                type: 'AUTH_ERROR',
+                message: 'Session expired. Please login again.',
+              }).catch(() => {});
+            }
+          });
+        });
       }
       return false;
     }
@@ -111,6 +124,12 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
           'Authorization': `Bearer ${newToken}`,
         },
       });
+    } else {
+      // Refresh failed, auto logout
+      console.log('🚪 Cannot refresh token, logging out...');
+      const { logout } = await import('./storage');
+      await logout();
+      throw new Error('Session expired. Please login again.');
     }
   }
 
@@ -191,13 +210,17 @@ export async function loginUser(data: {
 
 export async function logoutUser(): Promise<void> {
   try {
+    // Try to notify backend
     await fetchWithAuth(`${API_BASE}/api/auth/logout`, {
       method: 'POST',
+    }).catch(() => {
+      // Ignore errors, we're logging out anyway
     });
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
-    await clearAuthData();
+    const { logout } = await import('./storage');
+    await logout();
   }
 }
 

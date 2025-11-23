@@ -1,5 +1,4 @@
 // Content script for GenovaAI Extension
-import type { GenovaMessage } from '../shared/types';
 import bubbleStyles from './bubble.css?inline';
 
 const BUBBLE_ID = 'genovaai-bubble-container';
@@ -71,14 +70,44 @@ function initShadowDOM(): ShadowRoot {
 /**
  * Listen for messages from background script
  */
-chrome.runtime.onMessage.addListener((message: GenovaMessage) => {
+chrome.runtime.onMessage.addListener((message: any, _sender, sendResponse) => {
+  // Handle old format messages (GENOVA_RESULT, GENOVA_ERROR, GENOVA_LOADING)
   if (message.type === 'GENOVA_RESULT' && message.answer) {
     showBubble(message.answer, false);
+    sendResponse({ success: true });
+    return true;
   } else if (message.type === 'GENOVA_ERROR' && message.error) {
     showBubble('Error', true);
+    sendResponse({ success: true });
+    return true;
   } else if (message.type === 'GENOVA_LOADING') {
     showLoadingBubble();
+    sendResponse({ success: true });
+    return true;
   }
+  
+  // Handle auth errors
+  if (message.type === 'AUTH_ERROR') {
+    showBubble(message.message || 'Session expired. Please login again.', true);
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  // Handle logout
+  if (message.type === 'LOGOUT') {
+    showBubble('You have been logged out.', false);
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  // Handle direct answer messages (new format)
+  if (message.answer) {
+    showBubble(message.answer, message.type === 'error');
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  return false;
 });
 
 /**
