@@ -1,23 +1,19 @@
 import { useState, useEffect } from 'react';
-import { FaCog, FaRobot, FaBook, FaUser, FaCoins, FaCreditCard, FaPalette, FaFileAlt } from 'react-icons/fa';
+import { FaCog, FaRobot, FaHome } from 'react-icons/fa';
 import { isAuthenticated, getAuthData, type AuthData } from '../shared/storage';
 import { getProfile } from '../shared/api';
 import LoginPage from './components/LoginPage';
-import ProfilePage from './components/ProfilePage';
-import BalancePage from './components/BalancePage';
-import SessionsPage from './components/SessionsPage';
-import HistoryPage from './components/HistoryPage';
-import BubblePreferences from './components/BubblePreferences';
-import KnowledgeManager from './components/KnowledgeManager';
+import DashboardPage from './components/DashboardPage';
+import PreferencesPage from './components/PreferencesPage';
 import './styles.css';
 
-type TabType = 'profile' | 'balance' | 'sessions' | 'history' | 'knowledge' | 'preferences';
+type TabType = 'dashboard' | 'preferences';
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authData, setAuthData] = useState<AuthData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   useEffect(() => {
     checkAuth();
@@ -65,12 +61,6 @@ function App() {
     checkAuth();
   }
 
-  function handleLogout() {
-    setAuthenticated(false);
-    setAuthData(null);
-    setActiveTab('profile');
-  }
-
   if (loading) {
     return (
       <div className="app-container">
@@ -106,27 +96,6 @@ function App() {
               </div>
             </div>
           </div>
-          {authData?.user && (
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-              <div style={{ 
-                display: 'flex', 
-                gap: '10px',
-                padding: '8px 15px',
-                background: '#f5f5f5',
-                borderRadius: '8px',
-                fontSize: '14px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <FaCoins style={{ color: '#4CAF50' }} />
-                  <span><strong>{authData.user.credits || 0}</strong> credits</span>
-                </div>
-                <div style={{ borderLeft: '1px solid #ddd', paddingLeft: '10px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <FaCreditCard style={{ color: '#2196F3' }} />
-                  <span>Rp <strong>{authData.user.balance ? parseFloat(authData.user.balance.toString()).toLocaleString('id-ID') : '0'}</strong></span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -139,116 +108,44 @@ function App() {
         background: 'white',
       }}>
         <button
-          onClick={() => setActiveTab('profile')}
+          onClick={() => setActiveTab('dashboard')}
           style={{
             padding: '15px 25px',
             border: 'none',
-            borderBottom: activeTab === 'profile' ? '3px solid #4CAF50' : '3px solid transparent',
+            borderBottom: activeTab === 'dashboard' ? '3px solid #4CAF50' : '3px solid transparent',
             background: 'transparent',
             cursor: 'pointer',
             fontSize: '15px',
-            fontWeight: activeTab === 'profile' ? '600' : '500',
-            color: activeTab === 'profile' ? '#4CAF50' : '#666',
+            fontWeight: activeTab === 'dashboard' ? '600' : '500',
+            color: activeTab === 'dashboard' ? '#4CAF50' : '#666',
             transition: 'all 0.2s',
           }}
         >
-          <FaUser style={{ marginRight: '8px' }} />
-          Profile
-        </button>
-        <button
-          onClick={() => setActiveTab('balance')}
-          style={{
-            padding: '15px 25px',
-            border: 'none',
-            borderBottom: activeTab === 'balance' ? '3px solid #2196F3' : '3px solid transparent',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: activeTab === 'balance' ? '600' : '500',
-            color: activeTab === 'balance' ? '#2196F3' : '#666',
-            transition: 'all 0.2s',
-          }}
-        >
-          <FaCreditCard style={{ marginRight: '8px' }} />
-          Balance
-        </button>
-        <button
-          onClick={() => setActiveTab('sessions')}
-          style={{
-            padding: '15px 25px',
-            border: 'none',
-            borderBottom: activeTab === 'sessions' ? '3px solid #9C27B0' : '3px solid transparent',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: activeTab === 'sessions' ? '600' : '500',
-            color: activeTab === 'sessions' ? '#9C27B0' : '#666',
-            transition: 'all 0.2s',
-          }}
-        >
-          <FaCog style={{ marginRight: '8px' }} />
-          Sessions
-        </button>
-        <button
-          onClick={() => setActiveTab('history')}
-          style={{
-            padding: '15px 25px',
-            border: 'none',
-            borderBottom: activeTab === 'history' ? '3px solid #FF9800' : '3px solid transparent',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: activeTab === 'history' ? '600' : '500',
-            color: activeTab === 'history' ? '#FF9800' : '#666',
-            transition: 'all 0.2s',
-          }}
-        >
-          <FaBook style={{ marginRight: '8px' }} />
-          History
-        </button>
-        <button
-          onClick={() => setActiveTab('knowledge')}
-          style={{
-            padding: '15px 25px',
-            border: 'none',
-            borderBottom: activeTab === 'knowledge' ? '3px solid #00BCD4' : '3px solid transparent',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: '15px',
-            fontWeight: activeTab === 'knowledge' ? '600' : '500',
-            color: activeTab === 'knowledge' ? '#00BCD4' : '#666',
-            transition: 'all 0.2s',
-          }}
-        >
-          <FaFileAlt style={{ marginRight: '8px' }} />
-          Knowledge
+          <FaHome style={{ marginRight: '8px' }} />
+          Dashboard
         </button>
         <button
           onClick={() => setActiveTab('preferences')}
           style={{
             padding: '15px 25px',
             border: 'none',
-            borderBottom: activeTab === 'preferences' ? '3px solid #E91E63' : '3px solid transparent',
+            borderBottom: activeTab === 'preferences' ? '3px solid #2196F3' : '3px solid transparent',
             background: 'transparent',
             cursor: 'pointer',
             fontSize: '15px',
             fontWeight: activeTab === 'preferences' ? '600' : '500',
-            color: activeTab === 'preferences' ? '#E91E63' : '#666',
+            color: activeTab === 'preferences' ? '#2196F3' : '#666',
             transition: 'all 0.2s',
           }}
         >
-          <FaPalette style={{ marginRight: '8px' }} />
+          <FaCog style={{ marginRight: '8px' }} />
           Preferences
         </button>
       </div>
 
       <div className="app-content">
-        {activeTab === 'profile' && <ProfilePage authData={authData} onLogout={handleLogout} />}
-        {activeTab === 'balance' && <BalancePage authData={authData} />}
-        {activeTab === 'sessions' && <SessionsPage />}
-        {activeTab === 'history' && <HistoryPage />}
-        {activeTab === 'knowledge' && <KnowledgeManager />}
-        {activeTab === 'preferences' && <BubblePreferences />}
+        {activeTab === 'dashboard' && <DashboardPage />}
+        {activeTab === 'preferences' && <PreferencesPage />}
       </div>
 
       <footer className="app-footer">

@@ -304,6 +304,8 @@ export async function updateSession(sessionId: string, updates: {
   provider?: string;
   model?: string;
   isActive?: boolean;
+  useCustomPrompt?: boolean;
+  customSystemPrompt?: string;
 }): Promise<{ success: boolean; data?: any; message?: string }> {
   try {
     const response = await fetchWithAuth(`${API_BASE}/api/customer/genovaai/sessions/${sessionId}`, {
