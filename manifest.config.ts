@@ -17,7 +17,8 @@ export default defineManifest({
     'alarms', // For token refresh
   ],
   host_permissions: [
-    'http://localhost:3000/*', // Backend API
+    'https://genova.genfity.com/*', // Production API
+    'http://localhost:8090/*', // Development API
   ],
   background: {
     service_worker: 'src/background/index.ts',

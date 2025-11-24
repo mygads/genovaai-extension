@@ -47,11 +47,11 @@ export default function DashboardPage() {
   }
 
   function openServerSettings() {
-    chrome.tabs.create({ url: 'http://localhost:8090/dashboard/settings' });
+    chrome.tabs.create({ url: 'https://genova.genfity.com/dashboard/settings' });
   }
 
   function openServerUrl() {
-    chrome.tabs.create({ url: 'http://localhost:8090/dashboard' });
+    chrome.tabs.create({ url: 'https://genova.genfity.com/dashboard' });
   }
 
   async function handleLogout() {

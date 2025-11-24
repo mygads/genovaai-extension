@@ -199,7 +199,7 @@ export default function VoucherRedemption({ onRedeemSuccess }: Props) {
         <div style={{ textAlign: 'center', marginTop: '15px' }}>
           <p style={{ fontSize: '13px', opacity: 0.8, marginBottom: '8px' }}>Don't have a voucher code?</p>
           <a
-            href="http://localhost:8090/dashboard/balance/topup"
+            href="http://https://genova.genfity.com/dashboard/balance/topup"
             target="_blank"
             rel="noopener noreferrer"
             style={{

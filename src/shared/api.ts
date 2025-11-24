@@ -1,7 +1,7 @@
 // API client for GenovaAI backend integration
 import { getAuthData, saveAuthData, logout, type AuthData } from './storage';
 
-const API_BASE = 'http://localhost:8090';
+const API_BASE = 'https://genova.genfity.com';
 
 /**
  * Refresh access token using refresh token
