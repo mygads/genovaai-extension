@@ -53,7 +53,7 @@ Extension sekarang mendukung pemilihan model AI yang dinamis untuk kedua provide
 ├─────────────────────────────────────────────────┤
 │ ▼ Gemini 2.5 Flash • Fastest, best for quick... │
 │   Gemini 2.5 Pro • Most capable for complex...  │
-│   Gemini 2.0 Flash • Previous generation, fast  │
+│   Gemini 3.0 Flash • Previous generation, fast  │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -64,7 +64,7 @@ Extension sekarang mendukung pemilihan model AI yang dinamis untuk kedua provide
 ├─────────────────────────────────────────────────┤
 │ ▼ Gemini 2.5 Flash • Google's fastest model    │
 │   Gemini 2.5 Pro • Google's most capable       │
-│   Gemini 2.0 Flash • Previous generation       │
+│   Gemini 3.0 Flash • Previous generation       │
 │   Claude 3.5 Sonnet • Anthropic's best model   │
 │   GPT-4o • OpenAI's multimodal flagship        │
 │   GPT-4o Mini • Faster, more affordable        │
