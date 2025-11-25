@@ -1,4 +1,4 @@
-// Types for GenovaAI Extension
+// Types for Genova AI Extension
 
 export type LLMProvider = 'gemini' | 'openrouter';
 

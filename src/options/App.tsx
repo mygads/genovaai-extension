@@ -90,7 +90,7 @@ function App() {
           <div className="logo-section">
             <FaRobot className="logo-icon" />
             <div>
-              <h1>GenovaAI Extension</h1>
+              <h1>Genova AI Extension</h1>
               <div className="subtitle">
                 Welcome, {authData?.user.name || authData?.user.email}
               </div>
@@ -149,7 +149,7 @@ function App() {
       </div>
 
       <footer className="app-footer">
-        <p>GenovaAI v2.0 – AI-Powered Quiz Assistant</p>
+        <p>Genova AI v2.0 - AI-Powered Quiz Assistant</p>
         <p className="footer-hint">Connected to backend server</p>
       </footer>
     </div>

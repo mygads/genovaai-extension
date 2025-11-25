@@ -1,4 +1,4 @@
-// Content script for GenovaAI Extension
+// Content script for Genova AI Extension
 import bubbleStyles from './bubble.css?inline';
 
 const BUBBLE_ID = 'genovaai-bubble-container';
@@ -250,4 +250,4 @@ function removeBubble(): void {
   }
 }
 
-console.log('GenovaAI Content Script loaded');
+console.log('Genova AI Content Script loaded');

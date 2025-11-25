@@ -1,4 +1,4 @@
-// API client for GenovaAI backend integration
+// API client for Genova AI backend integration
 import { getAuthData, saveAuthData, logout, type AuthData } from './storage';
 
 const API_BASE = 'https://genova.genfity.com';

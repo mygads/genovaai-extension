@@ -95,7 +95,7 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           <p style={{ color: '#666', fontSize: '14px' }}>
-            Welcome to GenovaAI Extension
+            Welcome to Genova AI Extension
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>

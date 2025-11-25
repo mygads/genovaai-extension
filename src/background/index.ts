@@ -1,4 +1,4 @@
-// Background service worker for GenovaAI Extension (Backend Integration)
+// Background service worker for Genova AI Extension (Backend Integration)
 import { isAuthenticated, getCurrentSessionId } from '../shared/storage';
 import { askQuestion, refreshAccessToken } from '../shared/api';
 import type { GenovaMessage } from '../shared/types';
@@ -10,7 +10,7 @@ chrome.runtime.onInstalled.addListener(() => {
   try {
     chrome.contextMenus.create({
       id: CONTEXT_MENU_ID,
-      title: 'GenovaAI',
+      title: 'Genova AI',
       contexts: ['selection'],
     });
     console.log('✅ Context menu created');
@@ -25,7 +25,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Set up session check alarm (every 30 minutes for reasonable monitoring)
   chrome.alarms.create('checkSession', { periodInMinutes: 30 });
   
-  console.log('GenovaAI Extension (Backend) installed');
+  console.log('Genova AI Extension (Backend) installed');
 });
 
 // Handle token refresh alarm
@@ -45,7 +45,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
             chrome.notifications.create({
               type: 'basic',
               iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-              title: 'GenovaAI Session Issue',
+              title: 'Genova AI Session Issue',
               message: 'Could not refresh your session. Please login again.',
               priority: 2,
             });
@@ -116,7 +116,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
             type: 'basic',
             iconUrl: chrome.runtime.getURL('icons/icon128.png'),
             title: 'Login Required',
-            message: 'Please login in GenovaAI extension settings to continue.',
+            message: 'Please login in Genova AI extension settings to continue.',
             priority: 2,
           });
         }
@@ -126,7 +126,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
 
-    console.log('🚀 Processing question with GenovaAI (Backend)...');
+    console.log('🚀 Processing question with Genova AI (Backend)...');
     console.log('📝 Question:', selectedText.substring(0, 100) + '...');
 
     // Show loading indicator
@@ -204,4 +204,4 @@ chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
 
-console.log('GenovaAI Background Service Worker (Backend) loaded');
+console.log('Genova AI Background Service Worker (Backend) loaded');

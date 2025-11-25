@@ -93,7 +93,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
-            GenovaAI
+            Genova AI
           </h1>
           <p style={{ color: '#666', fontSize: '14px' }}>AI-Powered Quiz Assistant</p>
         </div>

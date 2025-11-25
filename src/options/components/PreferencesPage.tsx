@@ -310,7 +310,7 @@ export default function PreferencesPage() {
             </p>
             <ul style={{ margin: 0, paddingLeft: '20px' }}>
               <li>Select text on any webpage</li>
-              <li>Right-click → "Ask GenovaAI"</li>
+              <li>Right-click → "Ask Genova AI"</li>
               <li>Answer appears in configured position</li>
               <li>Auto-hides after set duration</li>
             </ul>

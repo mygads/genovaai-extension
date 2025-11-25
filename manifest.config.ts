@@ -3,9 +3,9 @@ import pkg from './package.json'
 
 export default defineManifest({
   manifest_version: 3,
-  name: 'GenovaAI v2 - Smart Quiz Assistant',
+  name: 'Genova AI v2 - Smart AI Assistant',
   version: pkg.version,
-  description: 'AI-powered quiz assistant with backend integration',
+  description: 'AI-powered for quiz assistant with backend integration',
   icons: {
     48: 'public/logo.png',
   },
@@ -34,6 +34,6 @@ export default defineManifest({
     default_icon: {
       48: 'public/logo.png',
     },
-    default_title: 'GenovaAI Settings',
+    default_title: 'Genova AI Settings',
   },
 })
